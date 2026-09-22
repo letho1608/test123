@@ -1,0 +1,13 @@
+{
+  "name": "zen-claude-proxy",
+  "version": "1.0.0",
+  "description": "Chay model OpenCode Zen free tier hoac Ollama local ben trong Claude Code",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node start.js"
+  },
+  "license": "MIT"
+}

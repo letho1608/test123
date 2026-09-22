@@ -1,0 +1,46 @@
+HUONG DAN CAI DAT TREN UBUNTU (22.04 / 24.04)
+=============================================
+Copy tung khoi lenh duoi day, chay theo thu tu. Khong can sudo tru cho co ghi.
+
+--- 1. Cai Node.js 22 (proxy chi can Node >= 18, khong can them gi) ---
+sudo apt update
+sudo apt install -y curl git
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node --version   # phai ra v22.x (v18+ la duoc)
+
+--- 2. Cai Claude Code qua npm ---
+npm i -g @anthropic-ai/claude-code
+claude --version
+
+--- 3. (Chi can neu dung backend Ollama) Cai Ollama + pull model ---
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3:8b
+# kiem tra: ollama list
+
+--- 4. Lay code proxy ---
+git clone https://github.com/letho1608/test123.git zen-claude-proxy
+cd zen-claude-proxy
+node --check proxy.mjs && node --check start.js && echo OK
+
+--- 5. Chay proxy (menu) ---
+node start.js
+# menu hien ra:
+#   1. Ollama (model da cai tren may)   -> chon so thu tu model trong `ollama list`
+#   2. OpenCode Zen free tier (muse-spark-1.3-contributor-free, khong can key)
+#   3. Exit
+# start.js se tu patch ~/.claude/settings.json (merge modelOverrides, giu cac key khac)
+# roi start proxy o http://127.0.0.1:8898 va in lenh chay Claude.
+
+--- 6. Chay Claude Code (terminal khac, cung may) ---
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5
+claude
+# (Ten claude-sonnet-4-5 chi la alias de Claude chiu validate - request thuc te
+#  proxy tu route sang model backend da chon o buoc 5.)
+
+--- Ghi chu ---
+- Proxy bind 127.0.0.1: chi may nay goi duoc, khong lo ra mang ngoai, khong can mo firewall.
+- Backend Zen khong can API key, khong can cai opencode.
+- Backend Ollama can ollama dang chay (mac dinh http://127.0.0.1:11434).
+- Doi port: PORT=9000 node start.js (nho doi ANTHROPIC_BASE_URL theo).
+- Log proxy: proxy.log trong thu muc code.

@@ -13,8 +13,10 @@ Proxy và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows l�
 ## Chạy
 
 ```bash
-node start.js
+node start.js        # hoac: npm start
 ```
+
+Chi tiết từng lệnh cài trên Ubuntu xem file `INSTALL-UBUNTU.txt`.
 
 Menu:
 
