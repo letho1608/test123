@@ -172,7 +172,7 @@ async function diag() {
     try {
       const ips = dns ? await dns.resolve4("opencode.ai") : [];
       out.checks.dns_opencode_ai = { ok: true, ips };
-    } catch (e) { out.ok = false; out.checks.dns_opencode_ai = { ok: false, error: String(e).slice(0, 200) }; }
+    } catch (e) { out.checks.dns_opencode_ai = { ok: false, error: String(e).slice(0, 200) }; }
     try {
       const t0 = Date.now();
       const ctl = new AbortController();
@@ -181,8 +181,7 @@ async function diag() {
       clearTimeout(t);
       const txt = await r.text();
       out.checks.zen_models = { ok: r.ok, status: r.status, ms: Date.now() - t0, sample: txt.slice(0, 120) };
-      if (!r.ok) out.ok = false;
-    } catch (e) { out.ok = false; out.checks.zen_models = { ok: false, error: String(e).slice(0, 300) }; }
+    } catch (e) { out.checks.zen_models = { ok: false, error: String(e).slice(0, 300) }; }
   }
   if (BACKEND === "ollama" || true) {
     try {
@@ -192,13 +191,12 @@ async function diag() {
       const r = await fetch(new URL("/api/tags", OLLAMA_BASE), { signal: ctl.signal });
       clearTimeout(t);
       out.checks.ollama = { ok: r.ok, status: r.status, ms: Date.now() - t0 };
-      if (BACKEND === "ollama" && !r.ok) out.ok = false;
     } catch (e) {
-      const err = String(e).slice(0, 300);
-      out.checks.ollama = { ok: false, error: err };
-      if (BACKEND === "ollama") out.ok = false;
+      out.checks.ollama = { ok: false, error: String(e).slice(0, 300) };
     }
   }
+  // ok chung = duong backend dang dung (dns/ollama chi de tham khao khi khong phai backend hien tai)
+  out.ok = BACKEND === "ollama" ? !!out.checks.ollama?.ok : !!out.checks.zen_models?.ok;
   return out;
 }
 function zenToAnthropic(resp, model) {

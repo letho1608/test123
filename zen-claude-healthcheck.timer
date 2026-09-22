@@ -1,0 +1,10 @@
+[Unit]
+Description=Chay healthcheck proxy Claude backend moi 5 phut
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=zen-claude-healthcheck.service
+
+[Install]
+WantedBy=timers.target

@@ -62,6 +62,15 @@ loginctl enable-linger $USER
 # Luu y: file service gia dinh code o ~/zen-claude-proxy va node o /usr/bin/node
 # (dung chuan neu cai theo muc 1). Kiem tra: which node
 
+--- 8. Healthcheck tự động (tùy chọn, khuyên dùng) ---
+# Mỗi 5 phút gọi /diag 1 lần; fail 2 lần liên tiếp thì tự restart service.
+cp ~/zen-claude-proxy/zen-claude-healthcheck.service ~/zen-claude-proxy/zen-claude-healthcheck.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now zen-claude-healthcheck.timer
+systemctl --user list-timers | grep healthcheck
+# Chạy tay 1 lần để thử: node ~/zen-claude-proxy/healthcheck.mjs
+# (in OK là tốt; in FAIL 2 lần thì nó tự restart service)
+
 --- Ghi chú ---
 - Proxy bind 127.0.0.1: chỉ máy này gọi được, không lộ ra mạng ngoài, không cần mở firewall.
 - Backend Zen không cần API key, không cần cài opencode.

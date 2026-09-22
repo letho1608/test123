@@ -1,0 +1,7 @@
+[Unit]
+Description=Kiem tra proxy Claude backend dinh ky (zen-claude-proxy)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/zen-claude-proxy
+ExecStart=/usr/bin/node %h/zen-claude-proxy/healthcheck.mjs
