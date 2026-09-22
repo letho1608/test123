@@ -1,0 +1,21 @@
+[Unit]
+Description=zen-claude-proxy (backend Zen free tier / Ollama cho Claude Code)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/zen-claude-proxy
+ExecStart=/usr/bin/node %h/zen-claude-proxy/proxy.mjs
+Environment=BACKEND=zen
+Environment=PORT=8898
+# Backend Ollama thi doi 2 dong tren thanh:
+# Environment=BACKEND=ollama
+# Environment=OLLAMA_MODEL=qwen3:8b
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

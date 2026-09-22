@@ -38,7 +38,29 @@ node start.js
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5
 claude
 # (Tên claude-sonnet-4-5 chỉ là alias để Claude chịu validate — request thực tế
-#  proxy tự route sang model backend đã chọn ở bước 5.)
+#  proxy tự route sang model backend đã chọn ở bước 5. start.js cũng đã nhúng
+#  sẵn 3 biến này vào ~/.claude/settings.json nên thường mở `claude` là chạy.)
+
+--- 7. Chạy nền bằng systemd (khỏi giữ terminal, tự restart khi crash) ---
+# Cách nhanh (tắt terminal là chết theo, không tự restart):
+#   cd ~/zen-claude-proxy && nohup node proxy.mjs > proxy.out 2>&1 &
+# Cách chuẩn (khuyên dùng):
+mkdir -p ~/.config/systemd/user
+cp ~/zen-claude-proxy/zen-claude-proxy.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now zen-claude-proxy
+systemctl --user status zen-claude-proxy   # phai thay active (running)
+journalctl --user -u zen-claude-proxy -f   # xem log truc tiep
+# Tat terminal/SSH van chay tiep? chay them lenh nay 1 lan:
+loginctl enable-linger $USER
+# Dung/tat service:
+#   systemctl --user stop zen-claude-proxy
+#   systemctl --user disable zen-claude-proxy
+# Doi backend sang Ollama: sua 2 dong Environment trong file service
+# (BACKEND=ollama, OLLAMA_MODEL=<ten-model>) roi:
+#   systemctl --user daemon-reload && systemctl --user restart zen-claude-proxy
+# Luu y: file service gia dinh code o ~/zen-claude-proxy va node o /usr/bin/node
+# (dung chuan neu cai theo muc 1). Kiem tra: which node
 
 --- Ghi chú ---
 - Proxy bind 127.0.0.1: chỉ máy này gọi được, không lộ ra mạng ngoài, không cần mở firewall.
