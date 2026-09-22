@@ -64,6 +64,17 @@ claude
 Tên `claude-sonnet-4-5` chỉ là alias để Claude chịu validate — request thực tế
 proxy tự route sang model backend đã chọn.
 
+## Kiểm định model (verified không còn hardcode)
+
+`node test-e2e.js [model-id | all]` — với mỗi model, script tự start proxy,
+chạy Claude Code thật làm 1 task bắt buộc dùng tool (tạo file đúng nội dung),
+rồi ghi kết quả vào `verified.json`. Menu `start.js` đọc file này để gắn tag.
+
+- Test 1 con lẻ mất ~2-5 phút; quét full 8 con mất ~20-30 phút.
+- Lần quét gần nhất (trong `verified.json`): cả 8 model free đều PASS tool loop.
+  Lưu ý: quét dồn dập có thể ăn `429 FreeUsageLimitError` (rate limit phía Zen) —
+  đợi vài phút chạy lại con đó là pass.
+
 ## Backend Zen hoạt động thế nào
 
 Free tier Zen không check API key mà check "độ giống opencode". Proxy tự route
@@ -81,5 +92,20 @@ mỗi model đúng endpoint của nó:
 
 - Free tier là tài nguyên của OpenCode — dùng test thì ok, đừng mang đi production.
   Gate phía server có thể đổi bất cứ lúc nào (lúc đó proxy sẽ 403 cho tới khi reverse lại).
-- Mỗi request Zen cõng thêm ~13KB prompt + 6 tools mồi → tốn token hơn bình thường.
+- Mỗi request Zen cõng thêm ~13KB prompt + tools mồi → tốn token hơn bình thường.
 - Proxy không có auth — vì bind localhost nên chỉ process trên máy gọi được. Đừng bind ra ngoài.
+
+## Lỗi thường gặp
+
+**`API Error: Connection refused` trong Claude Code** = Claude không nối được tới proxy.
+99% là do proxy **chưa chạy** (mỗi terminal mới phải start proxy trước), hoặc lệch port:
+
+1. Kiểm tra proxy có nghe không:
+   - Windows (PowerShell): `curl.exe -s http://127.0.0.1:8898/`
+   - Ubuntu: `curl -s http://127.0.0.1:8898/`
+   - Phải thấy dòng `zen-claude-proxy dang chay`. Nếu `Connection refused` → chạy `node start.js` (chọn 2) trước rồi mới mở Claude.
+2. Kiểm tra đường ra mạng của máy: mở `http://127.0.0.1:8898/diag` trên browser —
+   xem `zen_models.ok` có `true` không. Nếu `false`, đọc `error` trong đó (DNS/timeout/...)
+   rồi gửi output cho người debug.
+3. Đổi port thì đổi cả 2 chỗ: `PORT=9000 node start.js` + `ANTHROPIC_BASE_URL`
+   trong settings.json (hoặc chạy lại `start.js`, nó patch lại).
