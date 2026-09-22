@@ -131,23 +131,67 @@ function zenTools(claudeTools) {
   }
   return out;
 }
-async function zenCall(payload) {
+async function zenCall(payload, timeoutMs = 120000) {
   const session = mintSes(), req = mintMsg();
   payload.prompt_cache_key = session;
-  const res = await fetch(ZEN_BASE + "/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer public",
-      "User-Agent": UA,
-      "x-opencode-client": "cli",
-      "x-opencode-project": "global",
-      "x-opencode-request": req,
-      "x-opencode-session": session,
-    },
-    body: JSON.stringify(payload),
-  });
-  return res;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(new Error("timeout gui zen sau " + timeoutMs + "ms")), timeoutMs);
+  try {
+    const res = await fetch(ZEN_BASE + "/responses", {
+      method: "POST",
+      signal: ctl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer public",
+        "User-Agent": UA,
+        "x-opencode-client": "cli",
+        "x-opencode-project": "global",
+        "x-opencode-request": req,
+        "x-opencode-session": session,
+      },
+      body: JSON.stringify(payload),
+    });
+    return res;
+  } finally {
+    clearTimeout(t);
+  }
+}
+// GET /diag: kiem tra duong ra mang (DNS, Cloudflare, zen, ollama) de do loi firewall/network
+async function diag() {
+  const out = { ok: true, backend: BACKEND, node: process.version, time: new Date().toISOString(), checks: {} };
+  const dns = await import("node:dns").then((m) => m.promises).catch(() => null);
+  if (BACKEND === "zen" || true) {
+    try {
+      const ips = dns ? await dns.resolve4("opencode.ai") : [];
+      out.checks.dns_opencode_ai = { ok: true, ips };
+    } catch (e) { out.ok = false; out.checks.dns_opencode_ai = { ok: false, error: String(e).slice(0, 200) }; }
+    try {
+      const t0 = Date.now();
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(new Error("timeout")), 20000);
+      const r = await fetch(ZEN_BASE + "/models", { signal: ctl.signal, headers: { "User-Agent": UA } });
+      clearTimeout(t);
+      const txt = await r.text();
+      out.checks.zen_models = { ok: r.ok, status: r.status, ms: Date.now() - t0, sample: txt.slice(0, 120) };
+      if (!r.ok) out.ok = false;
+    } catch (e) { out.ok = false; out.checks.zen_models = { ok: false, error: String(e).slice(0, 300) }; }
+  }
+  if (BACKEND === "ollama" || true) {
+    try {
+      const t0 = Date.now();
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(new Error("timeout")), 10000);
+      const r = await fetch(new URL("/api/tags", OLLAMA_BASE), { signal: ctl.signal });
+      clearTimeout(t);
+      out.checks.ollama = { ok: r.ok, status: r.status, ms: Date.now() - t0 };
+      if (BACKEND === "ollama" && !r.ok) out.ok = false;
+    } catch (e) {
+      const err = String(e).slice(0, 300);
+      out.checks.ollama = { ok: false, error: err };
+      if (BACKEND === "ollama") out.ok = false;
+    }
+  }
+  return out;
 }
 function zenToAnthropic(resp, model) {
   const content = [];
@@ -437,7 +481,26 @@ async function handleZen(body, model, res) {
     tools: zenTools(body.tools),
     tool_choice: "auto", // upstream chi ho tro auto
   };
-  const up = await zenCall(payload);
+  const { res: up, netErr } = await (async () => {
+    try {
+      return { res: await zenCall(payload) };
+    } catch (e) {
+      // loi mang (DNS/timeout/refused...): thu lai 1 lan
+      log(`zen network error (lan 1): ${String(e).slice(0, 200)}`);
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        return { res: await zenCall(payload) };
+      } catch (e2) {
+        return { netErr: String(e2).slice(0, 300) };
+      }
+    }
+  })();
+  if (netErr) {
+    log(`zen network error (lan 2): ${netErr}`);
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "khong noi duoc opencode.ai tu may nay (firewall/DNS/mang?). Mo /diag de xem chi tiet. Chi tiet: " + netErr } }));
+    return;
+  }
   if (!up.ok) {
     const t = await up.text();
     if (t.includes("FreeTierError")) {
@@ -535,6 +598,15 @@ const server = http.createServer(async (req, res) => {
         + `</body></html>`;
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
+      return;
+    }
+    if (req.method === "GET" && pathname === "/diag") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      try {
+        res.end(JSON.stringify(await diag(), null, 2));
+      } catch (e) {
+        res.end(JSON.stringify({ ok: false, error: String(e).slice(0, 300) }));
+      }
       return;
     }
     if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
