@@ -526,6 +526,17 @@ const server = http.createServer(async (req, res) => {
   try { pathname = new URL(req.url, "http://127.0.0.1").pathname; } catch {}
   try {
     if (req.method === "HEAD") { res.writeHead(200); res.end(); return; }
+    if (req.method === "GET" && pathname === "/") {
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>zen-claude-proxy</title></head><body style="font-family:sans-serif;max-width:640px;margin:40px auto">`
+        + `<h2>zen-claude-proxy dang chay</h2>`
+        + `<p>backend: <b>${BACKEND}</b> (${BACKEND === "ollama" ? OLLAMA_MODEL + " @ " + OLLAMA_BASE : ZEN_MODEL + " @ " + ZEN_BASE})</p>`
+        + `<p>Day la API cho Claude Code (<code>POST /v1/messages</code>), khong phai trang web.</p>`
+        + `<p>Chay Claude Code terminal khac voi:<br><code>ANTHROPIC_BASE_URL=http://127.0.0.1:${PORT} ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5</code></p>`
+        + `</body></html>`;
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+      return;
+    }
     if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
       const ids = BACKEND === "ollama" && OLLAMA_MODEL ? [OLLAMA_MODEL, ...MODEL_IDS] : MODEL_IDS;
       const now = Date.now();
