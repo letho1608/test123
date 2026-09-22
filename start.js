@@ -23,9 +23,16 @@ function patchClaudeSettings(targetModelId) {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: targetModelId };
+  // nhung env vao settings de mo claude khong can export tay (tranh loi "Not logged in")
+  cfg.env = {
+    ...(cfg.env || {}),
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+    ANTHROPIC_API_KEY: "public",
+    ANTHROPIC_MODEL: ALIAS,
+  };
   fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(cfg, null, 2));
-  console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${targetModelId})`);
+  console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${targetModelId} + env ANTHROPIC_*)`);
 }
 
 function ollamaModels() {
