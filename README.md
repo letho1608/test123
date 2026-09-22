@@ -32,7 +32,9 @@ Menu:
 Chọn `1` → liệt kê `ollama list` để pick model, rồi tự `ollama cp` sang tên
 dạng `claude-*` (Claude Code chỉ gửi đi tên model bắt đầu bằng `claude-`,
 còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không proxy.**
-Chọn `2` → dùng Zen free tier, không cần key (bắt buộc qua proxy, xem dưới).
+Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
+nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`
+(model duy nhất đã verify end-to-end; model khác có thể 401/500 do endpoint/SDK khác).
 
 `start.js` sẽ:
 
