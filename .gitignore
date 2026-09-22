@@ -1,0 +1,5 @@
+proxy.log
+zen_ids.json
+node_modules/
+harvest/
+*.bin
