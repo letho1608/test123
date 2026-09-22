@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || process.argv[2] || 8898);
-const HOST = "127.0.0.1"; // local-only theo yeu cau, khong bind ra ngoai
+const HOST = process.env.HOST || "127.0.0.1"; // mac dinh local-only; chi doi khi test trong docker
 const BACKEND = (process.env.BACKEND || "zen").toLowerCase();
 
 // --- zen ---
