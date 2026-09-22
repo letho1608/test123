@@ -64,6 +64,28 @@ claude
 Tên `claude-sonnet-4-5` chỉ là alias để Claude chịu validate — request thực tế
 proxy tự route sang model backend đã chọn.
 
+## Cấu trúc code
+
+```text
+proxy.mjs            entry point mỏng (gọi src/server.js)
+src/
+  config.js          mọi cấu hình + validate env, hằng số, load assets
+  logger.js          log theo level (debug/info/warn/error)
+  errors.js          error contract thống nhất + validate input (400 sớm)
+  ids.js             mint ses_/msg_ đúng format time-ordered
+  translators/
+    anthropic.js     blocks Anthropic + map tool opencode->Claude
+    responses.js     Anthropic <-> Responses API (zen)
+    openai.js        Anthropic <-> Chat Completions (ollama + zen-chat)
+  sse.js             đọc SSE + khung SSE Anthropic (dùng chung 2 backend)
+  backends/
+    zen.js           Zen free tier (fingerprint, retry, route /responses|/chat)
+    ollama.js        Ollama OpenAI-compat
+  server.js          routes, validation, graceful shutdown, /diag
+test/                unit test offline (`npm test`, vài giây)
+test-e2e.js          kiểm định tool-loop thật (`node test-e2e.js [model|all]`)
+```
+
 ## Kiểm định model (verified không còn hardcode)
 
 `node test-e2e.js [model-id | all]` — với mỗi model, script tự start proxy,
