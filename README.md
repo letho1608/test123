@@ -1,8 +1,11 @@
 # zen-claude-proxy
 
 Chạy model **OpenCode Zen free tier** (`muse-spark-1.3-contributor-free`) hoặc **Ollama** local
-bên trong **Claude Code**, qua proxy dịch Anthropic `/v1/messages` → backend tương ứng.
-Proxy và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows lẫn Ubuntu.
+bên trong **Claude Code**.
+
+- **Ollama (từ v0.14): nói native Anthropic `/v1/messages` → đi thẳng, KHÔNG proxy.**
+- **Zen free tier: bắt buộc qua proxy** (free tier gate chỉ pass request đúng dạng opencode).
+  Proxy và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows lẫn Ubuntu.
 
 ## Yêu cầu
 
@@ -26,8 +29,10 @@ Menu:
 3. Exit
 ```
 
-Chọn `1` → liệt kê `ollama list` để pick model.
-Chọn `2` → dùng Zen free tier, không cần key.
+Chọn `1` → liệt kê `ollama list` để pick model, rồi tự `ollama cp` sang tên
+dạng `claude-*` (Claude Code chỉ gửi đi tên model bắt đầu bằng `claude-`,
+còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không proxy.**
+Chọn `2` → dùng Zen free tier, không cần key (bắt buộc qua proxy, xem dưới).
 
 `start.js` sẽ:
 

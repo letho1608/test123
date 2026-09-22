@@ -17,74 +17,111 @@ const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
 const ALIAS = "claude-sonnet-4-5"; // model name dung trong Claude Code (da verify)
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q) => new Promise((r) => rl.question(q, (a) => r(a.trim())));
+// stdin pipe (khong phai terminal, vd test tu dong): doc het len truoc roi tra loi tuan tu.
+// readline + pipe tren Windows chi doc duoc dong dau.
+let pipedLines = null;
+if (!process.stdin.isTTY) {
+  try { pipedLines = fs.readFileSync(0, "utf8").split(/\r?\n/); } catch { pipedLines = []; }
+}
+const ask = (q) => {
+  if (pipedLines) {
+    process.stdout.write(q);
+    const a = (pipedLines.shift() ?? "").trim();
+    process.stdout.write(a + "\n");
+    return Promise.resolve(a);
+  }
+  return new Promise((r) => rl.question(q, (a) => r(a.trim())));
+};
 
-function patchClaudeSettings(targetModelId) {
-  let cfg = {};
-  try { cfg = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
-  cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: targetModelId };
-  // nhung env vao settings de mo claude khong can export tay (tranh loi "Not logged in")
+function loadSettings() {
+  try { return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch { return {}; }
+}
+function saveSettings(cfg) {
+  fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
+  fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(cfg, null, 2));
+}
+
+function claudeEnvLines(baseUrl, model, authToken) {
+  if (IS_WIN) {
+    const lines = [
+      `$env:ANTHROPIC_BASE_URL = "${baseUrl}"`,
+      `$env:ANTHROPIC_API_KEY = "public"`,
+      `$env:ANTHROPIC_MODEL = "${model}"`,
+    ];
+    if (authToken) lines.splice(2, 0, `$env:ANTHROPIC_AUTH_TOKEN = "${authToken}"`);
+    lines.push(`claude`);
+    return lines;
+  }
+  const auth = authToken ? ` ANTHROPIC_AUTH_TOKEN=${authToken}` : "";
+  return [
+    `export ANTHROPIC_BASE_URL=${baseUrl}${auth} ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=${model}`,
+    `claude`,
+  ];
+}
+
+function ollamaModels() {
+  // stdio[0]=ignore: khong de ollama nut stdin cua menu
+  const r = spawnSync("ollama", ["list"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  if (r.error || r.status !== 0) return null;
+  return r.stdout.split("\n").slice(1).map((l) => l.trim().split(/\s+/)[0]).filter((n) => n && n !== "NAME");
+}
+
+async function main() {
+  console.log("== chon backend cho Claude Code (khong proxy neu duoc) ==");
+  console.log("1. Ollama TRUC TIEP (khong proxy) - can ollama + model da pull");
+  console.log("2. OpenCode Zen free tier (qua proxy localhost)");
+  console.log("3. Exit");
+  const pick = await ask("chon [1/2/3]: ");
+  if (pick === "3") { rl.close(); return; }
+
+  if (pick === "1") {
+    // Ollama noi native /v1/messages tu v0.14 -> di thang, khong can proxy.
+    // Claude Code chi gui ten model di (bat dau bang claude-), nen cp model sang ten do.
+    const models = ollamaModels();
+    if (!models) { console.error("khong chay duoc `ollama list` (chua cai ollama hoac chua start?)"); rl.close(); process.exitCode = 1; return; }
+    if (!models.length) { console.error("ollama chua co model nao (`ollama pull <model>` truoc)"); rl.close(); process.exitCode = 1; return; }
+    console.log("model ollama:");
+    models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
+    const n = Number(await ask(`chon model [1-${models.length}] (mac dinh 1): `) || "1");
+    const src = models[n - 1] || models[0];
+    const alias = (await ask("alias Claude de dung [claude-haiku-4-5]: ")) || "claude-haiku-4-5";
+    console.log(`copy ollama: ${src} -> ${alias} ...`);
+    const cp = spawnSync("ollama", ["cp", src, alias], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    if (cp.status !== 0) { console.error("ollama cp that bai:", (cp.stderr || "").slice(0, 300)); rl.close(); process.exitCode = 1; return; }
+    const cfg = loadSettings();
+    cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
+    delete cfg.modelOverrides[alias]; // di thang: khong rewrite ten model
+    cfg.env = {
+      ...(cfg.env || {}),
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:11434",
+      ANTHROPIC_AUTH_TOKEN: "ollama",
+      ANTHROPIC_API_KEY: "ollama",
+      ANTHROPIC_MODEL: alias,
+    };
+    saveSettings(cfg);
+    console.log(`da patch ${CLAUDE_SETTINGS} (di thang ollama, khong proxy)`);
+    rl.close();
+    console.log("\nXONG. Mo terminal khac chay:\n  " + claudeEnvLines("http://127.0.0.1:11434", alias, "ollama").join("\n  ") + "\n");
+    console.log("(settings.json da co san env, thuong mo `claude` la chay, khoi export.)");
+    return;
+  }
+
+  if (pick !== "2") { rl.close(); return; }
+  // --- backend zen: BAT BUOC qua proxy (free tier gate chi pass request dang opencode) ---
+  const target = "muse-spark-1.3-contributor-free";
+  const cfg = loadSettings();
+  cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: target };
   cfg.env = {
     ...(cfg.env || {}),
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
     ANTHROPIC_API_KEY: "public",
     ANTHROPIC_MODEL: ALIAS,
   };
-  fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
-  fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(cfg, null, 2));
-  console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${targetModelId} + env ANTHROPIC_*)`);
-}
-
-function ollamaModels() {
-  const r = spawnSync("ollama", ["list"], { encoding: "utf8" });
-  if (r.error || r.status !== 0) return null;
-  return r.stdout.split("\n").slice(1).map((l) => l.trim().split(/\s+/)[0]).filter((n) => n && n !== "NAME");
-}
-
-function claudeEnvLines() {
-  if (IS_WIN) {
-    return [
-      `$env:ANTHROPIC_BASE_URL = "http://127.0.0.1:${PORT}"`,
-      `$env:ANTHROPIC_API_KEY = "public"`,
-      `$env:ANTHROPIC_MODEL = "${ALIAS}"`,
-      `claude`,
-    ];
-  }
-  return [
-    `export ANTHROPIC_BASE_URL=http://127.0.0.1:${PORT} ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=${ALIAS}`,
-    `claude`,
-  ];
-}
-
-async function main() {
-  console.log("== zen-claude-proxy ==");
-  console.log("1. Ollama (model da cai tren may)");
-  console.log("2. OpenCode Zen free tier (muse-spark-1.3-contributor-free)");
-  console.log("3. Exit");
-  const pick = await ask("chon [1/2/3]: ");
-  if (pick === "3") { rl.close(); return; }
-
-  let env = { ...process.env, PORT: String(PORT) };
-  let target;
-  if (pick === "1") {
-    const models = ollamaModels();
-    if (!models) { console.error("khong chay duoc `ollama list` (chua cai ollama hoac chua start?)"); rl.close(); process.exitCode = 1; return; }
-    if (!models.length) { console.error("ollama chua co model nao (`ollama pull <model>` truoc)"); rl.close(); process.exitCode = 1; return; }
-    console.log("model ollama:");
-    models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-    const n = Number(await ask(`chon [1-${models.length}] (mac dinh 1): `) || "1");
-    target = models[n - 1] || models[0];
-    env.BACKEND = "ollama";
-    env.OLLAMA_MODEL = target;
-    env.OLLAMA_BASE = process.env.OLLAMA_BASE || "http://127.0.0.1:11434/v1";
-  } else if (pick === "2") {
-    target = "muse-spark-1.3-contributor-free";
-    env.BACKEND = "zen";
-  } else { rl.close(); return; }
-
-  patchClaudeSettings(target);
+  saveSettings(cfg);
+  console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${target} + env ANTHROPIC_*)`);
   rl.close();
-  console.log(`\nbackend=${env.BACKEND} model=${target}\nchay Claude Code terminal khac:\n  ` + claudeEnvLines().join("\n  ") + "\n");
+  const env = { ...process.env, PORT: String(PORT), BACKEND: "zen" };
+  console.log(`\nbackend=zen model=${target}\nneu muon go tay thay vi dung settings:\n  ` + claudeEnvLines(`http://127.0.0.1:${PORT}`, ALIAS).join("\n  ") + "\n");
   const p = spawn(process.execPath, [path.join(HERE, "proxy.mjs")], { env, stdio: "inherit" });
   p.on("exit", (c) => process.exit(c ?? 0));
 }
