@@ -66,6 +66,43 @@ function ollamaModels() {
   return r.stdout.split("\n").slice(1).map((l) => l.trim().split(/\s+/)[0]).filter((n) => n && n !== "NAME");
 }
 
+// Cai systemd user service de chay nen (chi Linux, can systemctl).
+// Tra ve true neu da cai (khong can chay foreground nua).
+async function setupSystemd(envExtra) {
+  const hasCtl = spawnSync("systemctl", ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
+  if (hasCtl.error || hasCtl.status !== 0) {
+    console.log("(khong thay systemctl -> bo qua cai service, chay foreground nhu cu)");
+    return false;
+  }
+  const ans = (await ask("Cai systemd service chay nen luon (khoi giu terminal)? [y/N]: ")).toLowerCase();
+  if (ans !== "y" && ans !== "yes") return false;
+  const sysd = path.join(os.homedir(), ".config", "systemd", "user");
+  fs.mkdirSync(sysd, { recursive: true });
+  const envLines = Object.entries({ PORT: String(PORT), ...envExtra })
+    .map(([k, v]) => `Environment=${k}=${v}`).join("\n");
+  const svc = `[Unit]\nDescription=zen-claude-proxy (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
+    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\nExecStart=${process.execPath} ${path.join(HERE, "proxy.mjs")}\n${envLines}\n`
+    + `Restart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=default.target\n`;
+  fs.writeFileSync(path.join(sysd, "zen-claude-proxy.service"), svc);
+  for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {
+    try { fs.copyFileSync(path.join(HERE, f), path.join(sysd, f)); } catch {}
+  }
+  const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  run(["daemon-reload"]);
+  const en = run(["enable", "--now", "zen-claude-proxy"]);
+  if (en.status !== 0) {
+    console.error("enable service that bai:", (en.stderr || "").slice(0, 300));
+    console.log("lam tay theo INSTALL-UBUNTU.txt muc 7.");
+    return false;
+  }
+  run(["enable", "--now", "zen-claude-healthcheck.timer"]);
+  const st = run(["is-active", "zen-claude-proxy"]);
+  console.log(`\nservice zen-claude-proxy: ${(st.stdout || "").trim() || "unknown"}`);
+  console.log(`xem log: journalctl --user -u zen-claude-proxy -f`);
+  console.log(`tat: systemctl --user stop zen-claude-proxy`);
+  return true;
+}
+
 // model free da verify e2e qua proxy (chat + stream + tools)
 // Mac dinh cung (phong khi chua chay test-e2e.js); neu co verified.json thi lay theo ket qua that.
 const HARDCODED_VERIFIED = [
@@ -179,6 +216,8 @@ async function main() {
   saveSettings(cfg);
   console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${target} + env ANTHROPIC_*)`);
   rl.close();
+  // Linux: hoi cai systemd service chay nen luon khoi giu terminal
+  if (!IS_WIN && (await setupSystemd({ BACKEND: "zen", ZEN_MODEL: target }))) return;
   // preflight: port da co proxy minh chay san thi dung lai, khoi spawn chong
   try {
     const r = await fetch(`http://127.0.0.1:${PORT}/v1/models`);

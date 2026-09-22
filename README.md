@@ -35,6 +35,7 @@ còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng
 Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
 nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`
 (model duy nhất đã verify end-to-end; model khác có thể 401/500 do endpoint/SDK khác).
+Trên Linux còn hỏi thêm có cài systemd service chạy nền luôn không (khỏi giữ terminal).
 
 `start.js` sẽ:
 
