@@ -66,8 +66,18 @@ function ollamaModels() {
   return r.stdout.split("\n").slice(1).map((l) => l.trim().split(/\s+/)[0]).filter((n) => n && n !== "NAME");
 }
 
-// model zen free (provider "opencode" trong models.dev), khong can binary opencode
-const VERIFIED_ZEN = "muse-spark-1.3-contributor-free"; // model duy nhat da verify e2e
+// model free da verify e2e qua proxy (chat + stream + tools)
+const VERIFIED_ZEN = [
+  "muse-spark-1.3-contributor-free",
+  "muse-spark-1.2-contributor-free",
+  "nemotron-3-ultra-free",
+  "nemotron-3.5-lightning-free",
+  "mimo-v2.6-flash-free",
+  "mimo-v2.5-free",
+  "big-pickle",
+  "ling-3.0-flash-fin-free",
+];
+const DEFAULT_ZEN = VERIFIED_ZEN[0];
 async function zenModels() {
   try {
     const ctl = new AbortController();
@@ -132,17 +142,19 @@ async function main() {
   // --- backend zen: BAT BUOC qua proxy (free tier gate chi pass request dang opencode) ---
   let models = await zenModels();
   if (!models) {
-    console.log("khong lay duoc list model zen (mang?), dung mac dinh:", VERIFIED_ZEN);
-    models = [VERIFIED_ZEN];
+    console.log("khong lay duoc list model zen (mang?), dung mac dinh:", DEFAULT_ZEN);
+    models = [...VERIFIED_ZEN];
   } else {
+    // verified len truoc
+    models = [...VERIFIED_ZEN.filter((m) => models.includes(m)),
+      ...models.filter((m) => !VERIFIED_ZEN.includes(m))];
     console.log("model zen free:");
-    models.forEach((m, i) => console.log(`  ${i + 1}. ${m}${m === VERIFIED_ZEN ? "  (verified)" : ""}`));
+    models.forEach((m, i) => console.log(`  ${i + 1}. ${m}${VERIFIED_ZEN.includes(m) ? "  (verified)" : ""}`));
   }
-  const n = Number(await ask(`chon model [1-${models.length}] (mac dinh ${Math.max(models.indexOf(VERIFIED_ZEN), 0) + 1}): `) || "0");
-  const target = (n >= 1 && models[n - 1]) ? models[n - 1]
-    : (models.includes(VERIFIED_ZEN) ? VERIFIED_ZEN : models[0]);
-  if (target !== VERIFIED_ZEN) {
-    console.log(`Luu y: model nay chua verify e2e qua proxy (endpoint/SDK co the khac) - neu 401/500 thi chon lai ${VERIFIED_ZEN}.`);
+  const n = Number(await ask(`chon model [1-${models.length}] (mac dinh 1): `) || "0");
+  const target = (n >= 1 && models[n - 1]) ? models[n - 1] : DEFAULT_ZEN;
+  if (!VERIFIED_ZEN.includes(target)) {
+    console.log(`Luu y: model nay chua verify e2e qua proxy (endpoint/SDK co the khac) - neu 401/500 thi chon lai model (verified).`);
   }
   const cfg = loadSettings();
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: target };

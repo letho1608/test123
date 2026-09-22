@@ -40,6 +40,14 @@ try {
   const d = JSON.parse(fs.readFileSync(path.join(HERE, "decoy_tools.json"), "utf8"));
   if (Array.isArray(d) && d.length) DECOYS = d;
 } catch {}
+// 42 tools opencode dang OpenAI (cho model chat: nemotron/mimo/big-pickle...)
+let TOOLS42 = [];
+try {
+  const d = JSON.parse(fs.readFileSync(path.join(HERE, "tools42_oai.json"), "utf8"));
+  if (Array.isArray(d) && d.length) TOOLS42 = d;
+} catch {}
+// model di /responses (Responses API); model free con lai di /chat/completions
+const RESPONSES_MODELS = new Set(["muse-spark-1.3-contributor-free", "muse-spark-1.2-contributor-free"]);
 
 const T_SES = 1855425871850;
 const M_MSG = 1786706395100;
@@ -470,6 +478,8 @@ async function oaiAccumulate(upstreamRes) {
 
 // ---------- handlers ----------
 async function handleZen(body, model, res) {
+  // model chat (nemotron/mimo/big-pickle...): di /chat/completions dang OpenAI
+  if (!RESPONSES_MODELS.has(ZEN_MODEL)) return handleZenChat(body, model, res);
   const payload = {
     model: ZEN_MODEL,
     input: zenInput(body.system, body.messages),
@@ -527,6 +537,90 @@ async function finishZen(up, body, model, res) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(zenToAnthropic(j, model)));
   }
+}
+// zen model chat: POST /chat/completions dang OpenAI (tai su dung translator cua ollama)
+async function handleZenChat(body, model, res) {
+  const sysText = textOf(body.system);
+  const payload = {
+    model: ZEN_MODEL,
+    messages: oaiMessages(AGENTDEV + (sysText ? "\n\n" + sysText : ""), body.messages),
+    stream: true, // luon stream upstream
+    tools: [...TOOLS42, ...(oaiTools(body.tools) || [])],
+    tool_choice: "auto",
+  };
+  if (body.max_tokens) payload.max_tokens = body.max_tokens;
+  const doCall = async () => {
+    const session = mintSes(), req = mintMsg();
+    return fetch(ZEN_BASE + "/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer public",
+        "User-Agent": UA,
+        "x-opencode-client": "cli",
+        "x-opencode-project": "global",
+        "x-opencode-request": req,
+        "x-opencode-session": session,
+      },
+      body: JSON.stringify({ ...payload, prompt_cache_key: session }),
+    });
+  };
+  let up;
+  try {
+    up = await doCall();
+  } catch (e) {
+    res.writeHead(502, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "khong noi duoc opencode.ai: " + String(e).slice(0, 200) } }));
+    return;
+  }
+  if (!up.ok) {
+    const t = await up.text();
+    if (t.includes("FreeTierError")) {
+      const retry = await doCall();
+      if (retry.ok) {
+        if (body.stream !== false) {
+          res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+          await oaiStream(retry, res, model);
+          res.end();
+        } else {
+          const a = await oaiAccumulate(retry);
+          return finishOai(a, null, body, model, res);
+        }
+        return;
+      }
+      const rt = await retry.text();
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ type: "error", error: { type: "api_error", message: rt.slice(0, 500) } }));
+      return;
+    }
+    res.writeHead(up.status === 403 ? 400 : up.status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ type: "error", error: { type: "api_error", message: t.slice(0, 500) } }));
+    return;
+  }
+  if (body.stream !== false) {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    await oaiStream(up, res, model);
+    res.end();
+  } else {
+    const a = await oaiAccumulate(up);
+    return finishOai(a, null, body, model, res);
+  }
+}
+// dung chung cho ollama + zen-chat: object accumulate -> Anthropic message
+function finishOai(a, _u, body, model, res) {
+  const content = [];
+  if (a.content) content.push({ type: "text", text: a.content });
+  for (const c of a.calls) {
+    content.push(toToolUseBlock(c.id, c.name, c.args));
+  }
+  if (!content.length) content.push({ type: "text", text: "" });
+  const stop = a.calls.length ? "tool_use" : a.finish === "length" ? "max_tokens" : "end_turn";
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({
+    id: "msg_" + crypto.randomBytes(12).toString("hex"),
+    type: "message", role: "assistant", model, content, stop_reason: stop,
+    usage: { input_tokens: (a.usage.prompt_tokens ?? a.usage.input_tokens ?? 0), output_tokens: (a.usage.completion_tokens ?? a.usage.output_tokens ?? 0) },
+  }));
 }
 async function handleOllama(body, model, res) {
   const payload = {

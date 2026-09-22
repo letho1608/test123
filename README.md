@@ -66,13 +66,16 @@ proxy tự route sang model backend đã chọn.
 
 ## Backend Zen hoạt động thế nào
 
-Free tier Zen không check API key mà check "độ giống opencode":
+Free tier Zen không check API key mà check "độ giống opencode". Proxy tự route
+mỗi model đúng endpoint của nó:
 
-- `Authorization: Bearer public` + `User-Agent: opencode/...` + header `x-opencode-*`
-- `stream: true` bắt buộc, `tool_choice: "auto"`
-- body mang system prompt + tool definitions đặc trưng của opencode (file `agentdev.txt`,
-  `decoy_tools.json`), kèm tool của Claude Code
-- `ses_/msg_` ID đúng format time-ordered của opencode (proxy tự mint, không cần binary)
+- `muse-spark-1.3/1.2-contributor-free` → `/responses` (prompt agent + 6 tools mồi)
+- `nemotron-3-ultra/3.5-lightning-free`, `mimo-v2.6/v2.5-flash-free`, `big-pickle`,
+  `ling-3.0-flash-fin-free` → `/chat/completions` (prompt agent + đủ 42 tools opencode)
+
+Điểm chung bắt buộc: `Authorization: Bearer public` + header `x-opencode-*` với
+`ses_/msg_` ID đúng format time-ordered (proxy tự mint, không cần binary),
+`stream: true`, `tool_choice: "auto". Model free còn lại trả `401 Model is not supported`.
 
 ## Lưu ý
 
