@@ -17,6 +17,8 @@ claude --version
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:8b
 # kiểm tra: ollama list
+# Lưu ý: Ollama từ v0.14 nói native Anthropic /v1/messages nên Claude Code
+# đi thẳng, KHÔNG qua proxy. Còn Zen free tier thì bắt buộc qua proxy.
 
 --- 4. Lấy code proxy ---
 git clone https://github.com/letho1608/test123.git zen-claude-proxy
