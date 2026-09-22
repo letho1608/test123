@@ -13,7 +13,7 @@ Proxy và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows l�
 ## Chạy
 
 ```bash
-node start.js        # hoac: npm start
+node start.js        # hoặc: npm start
 ```
 
 Chi tiết từng lệnh cài trên Ubuntu xem file `INSTALL-UBUNTU.txt`.
@@ -21,8 +21,8 @@ Chi tiết từng lệnh cài trên Ubuntu xem file `INSTALL-UBUNTU.txt`.
 Menu:
 
 ```text
-1. Ollama (model da cai tren may)
-2. OpenCode Zen free tier (muse-spark-1.3-contributor-free)
+1. Ollama (model đã cài trên máy)
+2. OpenCode Zen free tier (muse-spark-1.3-contributor-free, không cần key)
 3. Exit
 ```
 
@@ -32,7 +32,7 @@ Chọn `2` → dùng Zen free tier, không cần key.
 `start.js` sẽ:
 
 1. Tự patch config Claude (`~/.claude/settings.json`, Windows: `%USERPROFILE%\.claude\settings.json`):
-   merge `modelOverrides: { "claude-sonnet-4-5": "<model-that>" }` (giữ nguyên các key khác,
+   merge `modelOverrides: { "claude-sonnet-4-5": "<model-tương-ứng>" }` (giữ nguyên các key khác,
    không restore khi tắt — đúng 1 lần là xong).
 2. Start proxy ở `http://127.0.0.1:8898` và in lệnh chạy Claude.
 
@@ -54,7 +54,7 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROP
 claude
 ```
 
-Tên `claude-sonnet-4-5` chỉ là alias để Claude Code chịu validate — request thực tế
+Tên `claude-sonnet-4-5` chỉ là alias để Claude chịu validate — request thực tế
 proxy tự route sang model backend đã chọn.
 
 ## Backend Zen hoạt động thế nào
