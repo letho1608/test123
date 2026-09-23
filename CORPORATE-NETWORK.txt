@@ -1,0 +1,52 @@
+DÙNG PROXY Ở MẠNG CÔNG TY BỊ BLOCK / HẠN CHẾ
+=============================================
+Nguyên tắc: Claude Code → proxy là traffic localhost (không bao giờ ra mạng ngoài),
+chỉ có proxy → opencode.ai:443 (backend Zen) là ra ngoài. Ollama thì offline hẳn.
+
+--- BƯỚC 1: CHẨN ĐOÁN (làm theo thứ tự, dừng ở bước nào đỏ thì sửa ở đó) ---
+1. Proxy có sống không:  curl http://127.0.0.1:8898/
+   Phải thấy trang "zen-claude-proxy dang chay". Connection refused = proxy chưa chạy.
+2. Máy có ra được Zen không: mở http://127.0.0.1:8898/diag trên browser,
+   xem `zen_models.ok` có true không + đọc `error` trong đó.
+3. DNS có chặn không (terminal trên máy đó):
+   Ubuntu:  nslookup opencode.ai
+   Windows: nslookup opencode.ai
+   Không resolve được = mạng chặn DNS.
+4. Có bị chặn TLS/SNI không:
+   openssl s_client -connect opencode.ai:443 -servername opencode.ai
+   (timeout/reset ở đây = firewall chặn IP:port hoặc SNI)
+5. Có proxy công ty bắt buộc không: xem biến môi trường HTTP_PROXY/HTTPS_PROXY.
+   echo $HTTPS_PROXY   (Ubuntu)   /   $env:HTTPS_PROXY   (PowerShell)
+
+--- CASE A: MẠNG BẮT BUỘC QUA HTTP PROXY CÔNG TY ---
+Node 22+ tự đi qua proxy công ty khi có 2 biến này (proxy.mjs không cần sửa gì):
+  export NODE_USE_ENV_PROXY=1
+  export HTTPS_PROXY=http://proxy-cong-ty:8080
+  export NO_PROXY=127.0.0.1,localhost   # QUAN TRỌNG: giữ Claude->proxy đi thẳng
+start.js đã tự thêm localhost vào NO_PROXY nếu phát hiện proxy công ty.
+Thiếu NO_PROXY là lỗi hay gặp nhất: request localhost cũng bị đẩy vòng qua
+proxy công ty → refused/timeout rất khó hiểu.
+
+--- CASE B: CÔNG TY TLS-INTERCEPT (cài cert riêng, lỗi certificate) ---
+Dấu hiệu: curl/openssl báo certificate verify failed / self-signed.
+Xin file CA của IT (.crt/.pem), rồi chạy proxy kèm:
+  export NODE_EXTRA_CA_CERTS=/duong/to/cong-ty-ca.pem
+  node start.js
+(Không bao giờ tắt kiểm chứng TLS để "cho chạy" — mất an toàn.)
+
+--- CASE C: ALLOWLIST DOMAIN (chỉ mở vài site) ---
+Xin IT mở 2 domain này, port 443:
+  opencode.ai
+  models.opencode.ai   (menu start.js đọc list model; không mở vẫn chạy nếu đã biết tên model)
+Kiểm tra nhanh: curl -sI https://opencode.ai/zen/v1/models
+
+--- CASE D: CHẶN HẲN AI / NGOÀI (không xin được gì) ---
+Dùng backend Ollama trong start.js (menu 1): 100% offline sau khi `ollama pull`,
+không cần mạng ngoài, không cần proxy trung gian. Đây là đường thoát cuối cùng.
+
+--- CASE ĐẶC BIỆT: CLAUDE BÁO CONNECTION REFUSED NHƯNG PROXY VẪN SỐNG ---
+99% là lệch cấu hình phía Claude, không phải mạng:
+1. Kiểm tra settings.json đang trỏ BASE_URL đi đâu (proxy 8898? ollama 11434?).
+   start.js mỗi lần chạy đều patch lại file này — chạy lại đúng menu là hết lệch.
+2. Kiểm tra biến môi trường shell đè lên settings (export cũ còn sót).
+3. Port proxy có process lạ chiếm không: thử đổi PORT=9000.

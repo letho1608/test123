@@ -1,11 +1,16 @@
 // server.js — HTTP server: routes, validation, graceful shutdown.
 import http from "node:http";
-import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL } from "./config.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT } from "./config.js";
 import { logger } from "./logger.js";
 import { ApiError, validateMessagesBody } from "./errors.js";
 import { loadAssets } from "./config.js";
 import { handleZen } from "./backends/zen.js";
 import { handleOllama } from "./backends/ollama.js";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const assets = loadAssets();
 logger.info(`assets: agentdev=${assets.agentdev.length} chars, decoys=${assets.decoys.length}, tools42=${assets.tools42.length}`);
@@ -98,18 +103,28 @@ const server = http.createServer(async (req, res) => {
     const body = await readJson(req);
     validateMessagesBody(body);
     const model = body.model || (BACKEND === "ollama" ? OLLAMA_MODEL : ZEN_MODEL);
-    logger.info(`HIT ${BACKEND} model=${model} stream=${body.stream !== false} tools=${(body.tools || []).length}`);
+    const log = (m) => logger.info(m);
+    log(`HIT ${BACKEND} model=${model} stream=${body.stream !== false} tools=${(body.tools || []).length}`);
     if (BACKEND === "ollama") {
       if (!OLLAMA_MODEL) throw ApiError.misconfigured("chua chon model ollama (OLLAMA_MODEL)");
-      return handleOllama(body, model, res, logger);
+      return handleOllama(body, model, res, log);
     }
-    return handleZen(body, model, assets, res, logger);
+    return handleZen(body, model, assets, res, log);
   } catch (e) {
     sendError(res, e);
   }
 });
 
 export function start() {
+  // Log loi fatal truoc khi chet de khong bao gio "chet im".
+  const fatal = (kind) => (err) => {
+    try {
+      fs.appendFileSync(path.join(ROOT, "proxy.log"),
+        `${new Date().toISOString()} [FATAL] ${kind}: ${String(err?.stack || err).slice(0, 1000)}\n`);
+    } catch {}
+  };
+  process.on("uncaughtException", fatal("uncaughtException"));
+  process.on("unhandledRejection", fatal("unhandledRejection"));
   server.listen(PORT, HOST, () => logger.info(`proxy [${BACKEND}] on http://${HOST}:${PORT}`));
   // Graceful shutdown: dung nhan request moi, doi request dang chay xong (toi da 30s) roi tat.
   let shuttingDown = false;

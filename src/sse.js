@@ -32,8 +32,11 @@ export async function pumpSSE(upstreamRes, onEvent) {
 // Khung message Anthropic SSE: tang dan index, gom text theo block, tool emit tron lan.
 export function anthropicFramer(down, model) {
   const send = (ev, data) => {
-    down.write(`event: ${ev}\n`);
-    down.write(`data: ${JSON.stringify(data)}\n\n`);
+    try {
+      if (down.destroyed || down.writableEnded) return;
+      down.write(`event: ${ev}\n`);
+      down.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch { /* client ngat giua chung -> bo, khong crash process */ }
   };
   const msgId = "msg_" + crypto.randomBytes(12).toString("hex");
   send("message_start", { type: "message_start", message: { id: msgId, type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } });

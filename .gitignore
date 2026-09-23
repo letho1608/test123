@@ -3,3 +3,4 @@ zen_ids.json
 node_modules/
 harvest/
 *.bin
+*.log

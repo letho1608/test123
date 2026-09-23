@@ -14,7 +14,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8898);
 const IS_WIN = process.platform === "win32";
 const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
-const ALIAS = "claude-sonnet-4-5"; // model name dung trong Claude Code (da verify)
+const ALIAS = "claude-sonnet-4-6"; // alias doi cao, ollama cp sang ten nay de nhin thay
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 // stdin pipe (khong phai terminal, vd test tu dong): doc het len truoc roi tra loi tuan tu.
@@ -68,6 +68,45 @@ function ollamaModels() {
 
 // Cai systemd user service de chay nen (chi Linux, can systemctl).
 // Tra ve true neu da cai (khong can chay foreground nua).
+// Mang cong ty hay bat proxy he thong (HTTP_PROXY...). Dam bao traffic ve
+// proxy localhost KHONG di vong qua proxy cong ty (se hong), bang cach
+// them 127.0.0.1/localhost vao NO_PROXY neu thieu.
+function ensureLocalhostBypass() {
+  const hasProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
+    || process.env.https_proxy || process.env.http_proxy;
+  if (!hasProxy) return;
+  for (const k of ["NO_PROXY", "no_proxy"]) {
+    const cur = process.env[k] || "";
+    const parts = cur.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const need of ["127.0.0.1", "localhost"]) {
+      if (!parts.includes(need)) parts.push(need);
+    }
+    process.env[k] = parts.join(",");
+  }
+  console.log("(phat hien proxy cong ty - da giu localhost di thang, khong qua proxy cong ty)");
+}
+
+// Tu dong git pull (fast-forward) khi co ban moi tren remote. Khong mang thi bo qua im lang.
+async function autoUpdate() {
+  const git = (args, timeout = 20000) => {
+    try {
+      return spawnSync("git", args, { cwd: HERE, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout });
+    } catch { return null; }
+  };
+  try {
+    if (!fs.existsSync(path.join(HERE, ".git"))) return;
+    const fetch = git(["fetch", "origin", "--quiet"]);
+    if (!fetch || fetch.status !== 0) return; // khong mang / khong remote
+    const behind = git(["rev-list", "--count", "HEAD..@{u}"]);
+    const n = Number((behind && behind.stdout || "").trim());
+    if (!Number.isFinite(n) || n <= 0) return;
+    console.log(`co ${n} commit moi tren remote, dang pull...`);
+    const pull = git(["pull", "--ff-only", "--quiet"], 60000);
+    if (pull && pull.status === 0) console.log("da cap nhat code moi nhat, chay tiep.");
+    else console.log("pull that bai (co sua local chua commit?), giu code hien tai va chay tiep.");
+  } catch { /* offline -> chay tiep binh thuong */ }
+}
+
 async function setupSystemd(envExtra) {
   const hasCtl = spawnSync("systemctl", ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
   if (hasCtl.error || hasCtl.status !== 0) {
@@ -115,16 +154,26 @@ const HARDCODED_VERIFIED = [
   "big-pickle",
   "ling-3.0-flash-fin-free",
 ];
-const DEFAULT_ZEN = HARDCODED_VERIFIED[0];
+const DEFAULT_ZEN = catalogZen().def;
+// verified.json (ket qua test-e2e that) uu tien hon models.json
 function verifiedSet() {
   try {
     const s = JSON.parse(fs.readFileSync(path.join(HERE, "verified.json"), "utf8"));
     const ok = Object.entries(s.results || {}).filter(([, r]) => r && r.ok).map(([m]) => m);
     if (ok.length) return { set: ok, at: s.updated };
   } catch {}
-  return { set: [...HARDCODED_VERIFIED], at: null };
+  return { set: catalogZen().verified, at: null };
 }
-const VERIFIED_ZEN = HARDCODED_VERIFIED;
+// Danh sach model mac dinh doc tu models.json (1 nguon duy nhat cho ca repo).
+function catalogZen() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(HERE, "models.json"), "utf8"));
+    if (j?.zen?.verified?.length) {
+      return { verified: j.zen.verified, def: j.zen.default || j.zen.verified[0] };
+    }
+  } catch {}
+  return { verified: [...HARDCODED_VERIFIED], def: HARDCODED_VERIFIED[0] };
+}
 async function zenModels() {
   try {
     const ctl = new AbortController();
@@ -140,12 +189,15 @@ async function zenModels() {
       const c = (ms[id] || {}).cost || {};
       return c.input === 0 && c.output === 0; // chi list model free
     });
-    if (!ids.includes(VERIFIED_ZEN) && ms[VERIFIED_ZEN]) ids.unshift(VERIFIED_ZEN);
+    const { def } = catalogZen();
+    if (!ids.includes(def) && ms[def]) ids.unshift(def);
     return ids.length ? ids : null;
   } catch { return null; }
 }
 
 async function main() {
+  await autoUpdate();
+  ensureLocalhostBypass();
   console.log("== chon backend cho Claude Code (khong proxy neu duoc) ==");
   console.log("1. Ollama TRUC TIEP (khong proxy) - can ollama + model da pull");
   console.log("2. OpenCode Zen free tier (qua proxy localhost)");
@@ -163,7 +215,7 @@ async function main() {
     models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
     const n = Number(await ask(`chon model [1-${models.length}] (mac dinh 1): `) || "1");
     const src = models[n - 1] || models[0];
-    const alias = (await ask("alias Claude de dung [claude-haiku-4-5]: ")) || "claude-haiku-4-5";
+    const alias = (await ask("alias Claude de dung [claude-sonnet-4-6]: ")) || "claude-sonnet-4-6";
     console.log(`copy ollama: ${src} -> ${alias} ...`);
     const cp = spawnSync("ollama", ["cp", src, alias], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     if (cp.status !== 0) { console.error("ollama cp that bai:", (cp.stderr || "").slice(0, 300)); rl.close(); process.exitCode = 1; return; }

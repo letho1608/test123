@@ -85,11 +85,18 @@ async function testOne(model, port) {
 }
 
 async function main() {
-  const list = ARG === "all"
-    ? ["muse-spark-1.3-contributor-free", "muse-spark-1.2-contributor-free",
+  let list;
+  if (ARG === "all") {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(HERE, "models.json"), "utf8"));
+      list = j?.zen?.verified?.length ? j.zen.verified : null;
+    } catch {}
+    list = list || [
+      "muse-spark-1.3-contributor-free", "muse-spark-1.2-contributor-free",
       "nemotron-3-ultra-free", "nemotron-3.5-lightning-free",
-      "mimo-v2.6-flash-free", "mimo-v2.5-free", "big-pickle", "ling-3.0-flash-fin-free"]
-    : [ARG];
+      "mimo-v2.6-flash-free", "mimo-v2.5-free", "big-pickle", "ling-3.0-flash-fin-free",
+    ];
+  } else list = [ARG];
   const store = loadVerified();
   for (const m of list) {
     console.log(`\n=== test ${m} ===`);

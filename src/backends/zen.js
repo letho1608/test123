@@ -2,7 +2,7 @@
 // Gate free tier (reverse-engineered): Bearer public + UA opencode + x-opencode-*
 // (ID time-ordered tu mint) + stream:true + tool_choice auto + body dang opencode
 // (prompt agent + tools opencode; model responses di /responses, con lai di /chat).
-import { ZEN_BASE, ZEN_MODEL, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS } from "../config.js";
+import { ZEN_BASE, ZEN_MODEL, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED } from "../config.js";
 import { logger } from "../logger.js";
 import { ApiError } from "../errors.js";
 import { mintSes, mintMsg } from "../ids.js";
@@ -11,11 +11,11 @@ import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../tra
 import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic } from "../translators/openai.js";
 import { pumpSSE, anthropicFramer, collectResponses, collectOpenAi, streamOpenAi } from "../sse.js";
 
-export function buildZenPayloads(body, assets) {
+export function buildZenPayloads(body, assets, modelId = ZEN_MODEL) {
   return {
     // model responses (muse-spark): Responses API
     responses: {
-      model: ZEN_MODEL,
+      model: modelId,
       input: toResponsesInput(body.system, body.messages, assets.agentdev),
       max_output_tokens: body.max_tokens || 4096,
       store: false,
@@ -27,7 +27,7 @@ export function buildZenPayloads(body, assets) {
     },
     // model chat (nemotron/mimo/big-pickle...): OpenAI Chat Completions
     chat: {
-      model: ZEN_MODEL,
+      model: modelId,
       messages: toOpenAiMessages(combineSystem(assets.agentdev, body.system), body.messages),
       stream: true,
       tools: [...assets.tools42, ...(toOpenAiTools(body.tools) || [])],
@@ -121,27 +121,41 @@ async function streamResponses(up, down, model) {
 }
 
 export async function handleZen(body, model, assets, res, log) {
-  const payloads = buildZenPayloads(body, assets);
-  const useResponses = RESPONSES_MODELS.has(ZEN_MODEL);
-  const path = useResponses ? "/responses" : "/chat/completions";
-  const payload = useResponses ? payloads.responses : payloads.chat;
+  // Failover: thu model dang chon truoc, hong thi sang model verified tiep theo.
+  // Tra ve model THAT da dung (Claude chap nhan mismatch, da verify).
+  const candidates = [ZEN_MODEL, ...ZEN_VERIFIED.filter((m) => m !== ZEN_MODEL)];
+  let lastErr = null;
+  for (const candidate of candidates) {
+    const useResponses = RESPONSES_MODELS.has(candidate);
+    const path = useResponses ? "/responses" : "/chat/completions";
+    const payload = buildZenPayloads(body, assets, candidate)[useResponses ? "responses" : "chat"];
+    try {
+      const up = await postZenOnce(path, payload, log);
+      log(`zen ${candidate} -> ${up.status}`);
+      return finishZenStream(up, body, candidate, useResponses, res);
+    } catch (e) {
+      lastErr = e;
+      log(`zen ${candidate} hong (${e.code || "error"}), failover sang model tiep theo`);
+    }
+  }
+  throw lastErr || ApiError.internal("het model thu");
+}
 
+// 1 candidate: gui 1 lan (+1 retry neu FreeTierError), loi mang nem ra ngoai.
+async function postZenOnce(path, payload, log) {
   const first = await postZenResilient(path, payload, log);
   if (first.netErr) throw ApiError.unreachable(`khong noi duoc opencode.ai tu may nay (firewall/DNS/mang?). Mo /diag de xem chi tiet. Chi tiet: ${first.netErr}`);
-  let up = first.res;
-  if (!up.ok) {
-    const t = await up.text();
-    if (t.includes("FreeTierError")) {
-      const retry = await postZenResilient(path, payload, log);
-      if (retry.netErr) throw ApiError.unreachable(`khong noi duoc opencode.ai (lan 2): ${retry.netErr}`);
-      if (retry.res.ok) return finishZenStream(retry.res, body, model, useResponses, res);
-      const rt = await retry.res.text();
-      throw ApiError.freetier(rt.slice(0, 500));
-    }
-    if (up.status === 403) throw ApiError.freetier(t.slice(0, 500));
-    throw ApiError.upstream(up.status, t.slice(0, 500));
+  const up = first.res;
+  if (up.ok) return up;
+  const t = await up.text();
+  if (t.includes("FreeTierError")) {
+    const retry = await postZenResilient(path, payload, log);
+    if (retry.netErr) throw ApiError.unreachable(`khong noi duoc opencode.ai (lan 2): ${retry.netErr}`);
+    if (retry.res.ok) return retry.res;
+    throw ApiError.freetier((await retry.res.text()).slice(0, 500));
   }
-  return finishZenStream(up, body, model, useResponses, res);
+  if (up.status === 403) throw ApiError.freetier(t.slice(0, 500));
+  throw ApiError.upstream(up.status, t.slice(0, 500));
 }
 
 async function finishZenStream(up, body, model, useResponses, res) {

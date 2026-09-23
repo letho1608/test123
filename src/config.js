@@ -20,7 +20,13 @@ export const BACKEND = (() => {
   if (!["zen", "ollama"].includes(b)) throw new Error(`BACKEND khong hop le: ${b} (chon zen|ollama)`);
   return b;
 })();
-export const PORT = num("PORT", 8898);
+export const PORT = (() => {
+  for (const src of [process.env.PORT, process.argv[2]]) {
+    const v = Number(src);
+    if (Number.isFinite(v) && v > 0) return v;
+  }
+  return 8898;
+})();
 export const HOST = "127.0.0.1"; // local-only theo thiet ke, khong bind ra ngoai
 
 // --- zen (da reverse tu binary opencode v1.18.21 + traffic that) ---
@@ -29,10 +35,22 @@ export const ZEN_MODEL = str("ZEN_MODEL", "muse-spark-1.3-contributor-free");
 export const ZEN_UA = "opencode/1.18.21 ai-sdk/provider-utils/4.0.38 runtime/bun/1.3.14";
 export const ZEN_TIMEOUT_MS = num("ZEN_TIMEOUT_MS", 120000);
 // Model zen free di Responses API; cac model free con lai di /chat/completions.
-export const RESPONSES_MODELS = new Set([
-  "muse-spark-1.3-contributor-free",
-  "muse-spark-1.2-contributor-free",
-]);
+function loadModelsJson() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(ROOT, "models.json"), "utf8"));
+    return j.zen || {};
+  } catch { return {}; }
+}
+const ZEN_CATALOG = loadModelsJson();
+export const RESPONSES_MODELS = new Set(
+  ZEN_CATALOG.responsesModels || [
+    "muse-spark-1.3-contributor-free",
+    "muse-spark-1.2-contributor-free",
+  ]
+);
+// Thu tu failover: model dang chon truoc, roi cac model verified con lai.
+export const ZEN_VERIFIED = ZEN_CATALOG.verified || [...RESPONSES_MODELS];
+export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-free";
 
 // --- ollama ---
 export const OLLAMA_BASE = str("OLLAMA_BASE", "http://127.0.0.1:11434/v1").replace(/\/+$/, "");
