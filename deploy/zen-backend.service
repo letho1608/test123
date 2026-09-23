@@ -1,5 +1,5 @@
 [Unit]
-Description=zen-claude-proxy (backend Zen free tier / Ollama cho Claude Code)
+Description=zen-backend plugin (Claude Code backend: Zen free tier / Ollama)
 After=network-online.target
 Wants=network-online.target
 
