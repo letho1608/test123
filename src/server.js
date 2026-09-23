@@ -3,7 +3,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT } from "./config.js";
+import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED } from "./config.js";
 import { logger } from "./logger.js";
 import { ApiError, validateMessagesBody } from "./errors.js";
 import { loadAssets } from "./config.js";
@@ -38,7 +38,7 @@ function readJson(req) {
 }
 
 async function diag() {
-  const out = { ok: true, backend: BACKEND, node: process.version, time: new Date().toISOString(), checks: {} };
+  const out = { ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, node: process.version, time: new Date().toISOString(), checks: {} };
   const dns = await import("node:dns").then((m) => m.promises).catch(() => null);
   try {
     const ips = dns ? await dns.resolve4("opencode.ai") : [];
@@ -61,15 +61,18 @@ async function diag() {
     clearTimeout(t);
     out.checks.ollama = { ok: r.ok, status: r.status, ms: Date.now() - t0 };
   } catch (e) { out.checks.ollama = { ok: false, error: String(e).slice(0, 300) }; }
-  // ok chung = duong backend dang dung
-  out.ok = BACKEND === "ollama" ? !!out.checks.ollama?.ok : !!out.checks.zen_models?.ok;
+  // ok chung = duong backend dang dung (luc nay, co the doi qua /admin/switch)
+  out.ok = runtime.backend === "ollama" ? !!out.checks.ollama?.ok : !!out.checks.zen_models?.ok;
   return out;
 }
 
 function statusPage() {
+  const b = runtime.backend;
+  const model = b === "ollama" ? runtime.ollamaModel : runtime.zenModel;
+  const where = b === "ollama" ? `${model} @ ${OLLAMA_BASE}` : `${model} @ ${ZEN_BASE}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>zen-backend plugin</title></head><body style="font-family:sans-serif;max-width:640px;margin:40px auto">`
     + `<h2>zen-backend plugin dang chay</h2>`
-    + `<p>backend: <b>${BACKEND}</b> (${BACKEND === "ollama" ? OLLAMA_MODEL + " @ " + OLLAMA_BASE : ZEN_MODEL + " @ " + ZEN_BASE})</p>`
+    + `<p>backend: <b>${b}</b> (${where})</p>`
     + `<p>Day la API cho Claude Code (<code>POST /v1/messages</code>), khong phai trang web.</p>`
     + `<p>Chay Claude Code terminal khac voi:<br><code>ANTHROPIC_BASE_URL=http://127.0.0.1:${PORT} ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5</code></p>`
     + `<p><a href="/diag">/diag</a> - chuan doan mang &amp; backend &middot; <a href="/v1/models">/v1/models</a></p>`
@@ -91,10 +94,35 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(await diag(), null, 2));
       return;
     }
-    if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
-      const ids = BACKEND === "ollama" && OLLAMA_MODEL ? [OLLAMA_MODEL, ...MODEL_IDS] : MODEL_IDS;
+    if (req.method === "GET" && (pathname === "/admin/status")) {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ object: "list", data: [...new Set(ids)].map((id) => ({ id, object: "model", created: Date.now(), owned_by: BACKEND })) }));
+      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, port: PORT, time: new Date().toISOString() }));
+      return;
+    }
+    if (req.method === "POST" && pathname === "/admin/switch") {
+      // Doi backend/model luc dang chay, khong can restart. Chi nghe localhost.
+      const b = await readJson(req);
+      if (b.backend !== undefined) {
+        if (!["zen", "ollama"].includes(b.backend)) throw ApiError.badRequest("backend phai la zen|ollama");
+        runtime.backend = b.backend;
+      }
+      if (b.zenModel !== undefined) {
+        if (typeof b.zenModel !== "string" || !b.zenModel) throw ApiError.badRequest("zenModel phai la string khac rong");
+        runtime.zenModel = b.zenModel;
+      }
+      if (b.ollamaModel !== undefined) {
+        if (typeof b.ollamaModel !== "string" || !b.ollamaModel) throw ApiError.badRequest("ollamaModel phai la string khac rong");
+        runtime.ollamaModel = b.ollamaModel;
+      }
+      logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} ollama=${runtime.ollamaModel || "-"}`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel }));
+      return;
+    }
+    if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
+      const ids = runtime.backend === "ollama" && runtime.ollamaModel ? [runtime.ollamaModel, ...MODEL_IDS] : MODEL_IDS;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ object: "list", data: [...new Set(ids)].map((id) => ({ id, object: "model", created: Date.now(), owned_by: runtime.backend })) }));
       return;
     }
     if (req.method !== "POST" || (pathname !== "/v1/messages" && pathname !== "/messages")) {
@@ -102,11 +130,13 @@ const server = http.createServer(async (req, res) => {
     }
     const body = await readJson(req);
     validateMessagesBody(body);
-    const model = body.model || (BACKEND === "ollama" ? OLLAMA_MODEL : ZEN_MODEL);
+    // Doc runtime moi request (doi duoc luc dang chay qua /admin/switch).
+    const backend = runtime.backend;
+    const model = body.model || (backend === "ollama" ? runtime.ollamaModel : runtime.zenModel);
     const log = (m) => logger.info(m);
-    log(`HIT ${BACKEND} model=${model} stream=${body.stream !== false} tools=${(body.tools || []).length}`);
-    if (BACKEND === "ollama") {
-      if (!OLLAMA_MODEL) throw ApiError.misconfigured("chua chon model ollama (OLLAMA_MODEL)");
+    log(`HIT ${backend} model=${model} stream=${body.stream !== false} tools=${(body.tools || []).length}`);
+    if (backend === "ollama") {
+      if (!runtime.ollamaModel) throw ApiError.misconfigured("chua chon model ollama (doi qua /admin/switch hoac env OLLAMA_MODEL)");
       return handleOllama(body, model, res, log);
     }
     return handleZen(body, model, assets, res, log);
@@ -125,7 +155,7 @@ export function start() {
   };
   process.on("uncaughtException", fatal("uncaughtException"));
   process.on("unhandledRejection", fatal("unhandledRejection"));
-  server.listen(PORT, HOST, () => logger.info(`zen-backend plugin [${BACKEND}] on http://${HOST}:${PORT}`));
+  server.listen(PORT, HOST, () => logger.info(`zen-backend plugin [${runtime.backend}] on http://${HOST}:${PORT}`));
   // Graceful shutdown: dung nhan request moi, doi request dang chay xong (toi da 30s) roi tat.
   let shuttingDown = false;
   const shutdown = (sig) => {

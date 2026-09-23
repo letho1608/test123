@@ -9,11 +9,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { claudeSettingsPath, loadSettings, saveSettings } from "./scripts/lib/settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8898);
 const IS_WIN = process.platform === "win32";
-const CLAUDE_SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
+const CLAUDE_SETTINGS = claudeSettingsPath();
 const ALIAS = "claude-sonnet-4-6"; // alias doi cao, ollama cp sang ten nay de nhin thay
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -32,14 +33,6 @@ const ask = (q) => {
   }
   return new Promise((r) => rl.question(q, (a) => r(a.trim())));
 };
-
-function loadSettings() {
-  try { return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch { return {}; }
-}
-function saveSettings(cfg) {
-  fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
-  fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(cfg, null, 2));
-}
 
 function claudeEnvLines(baseUrl, model, authToken) {
   if (IS_WIN) {
@@ -127,7 +120,7 @@ async function setupSystemd(envExtra) {
     + `Restart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=default.target\n`;
   fs.writeFileSync(path.join(sysd, "zen-backend.service"), svc);
   for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {
-    try { fs.copyFileSync(path.join(HERE, f), path.join(sysd, f)); } catch {}
+    try { fs.copyFileSync(path.join(HERE, "deploy", f), path.join(sysd, f)); } catch {}
   }
   const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   run(["daemon-reload"]);

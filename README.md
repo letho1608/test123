@@ -22,6 +22,18 @@ mở Claude Code tại thư mục cha của repo rồi gõ:
 
 Xong gọi skill `/zen-backend:zen-models` khi cần đổi model free / hết quota.
 
+## Đổi backend/model lúc đang chạy (không restart)
+
+```bash
+node switch.js status              # xem đang dùng gì
+node switch.js zen [model-zen]     # vd: node switch.js zen big-pickle
+node switch.js ollama <model> [alias]
+```
+
+`switch.js` vừa patch `settings.json` vừa gọi `POST /admin/switch` cho plugin
+đang chạy (có API `GET /admin/status` để xem). Trong Claude Code thì gọi
+command `/zen-backend:switch` với tham số tương tự.
+
 ## Yêu cầu
 
 - Node.js >= 18 (không cần gì thêm)

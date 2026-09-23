@@ -63,6 +63,14 @@ export const MODEL_IDS = [
   "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-3-5",
 ];
 
+// Runtime co the doi luc dang chay qua POST /admin/switch (khong can restart).
+// Khoi tao tu env, chi doi qua endpoint admin (localhost-only).
+export const runtime = {
+  backend: BACKEND,
+  zenModel: ZEN_MODEL,
+  ollamaModel: OLLAMA_MODEL,
+};
+
 // --- ID time-ordered cua opencode (dao nguoc tu DB + traffic):
 // ses_  = (T_SES - epoch_ms) * 4096 + 0xffe + 14 ky tu base62
 // msg_  = (epoch_ms - M_MSG) * 4096 + 0x001 + 14 ky tu base62

@@ -2,7 +2,7 @@
 // Gate free tier (reverse-engineered): Bearer public + UA opencode + x-opencode-*
 // (ID time-ordered tu mint) + stream:true + tool_choice auto + body dang opencode
 // (prompt agent + tools opencode; model responses di /responses, con lai di /chat).
-import { ZEN_BASE, ZEN_MODEL, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED } from "../config.js";
+import { ZEN_BASE, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED, runtime } from "../config.js";
 import { logger } from "../logger.js";
 import { ApiError } from "../errors.js";
 import { mintSes, mintMsg } from "../ids.js";
@@ -11,7 +11,7 @@ import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../tra
 import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, decoysToOpenAi } from "../translators/openai.js";
 import { pumpSSE, anthropicFramer, collectResponses, collectOpenAi, streamOpenAi } from "../sse.js";
 
-export function buildZenPayloads(body, assets, modelId = ZEN_MODEL) {
+export function buildZenPayloads(body, assets, modelId = runtime.zenModel) {
   return {
     // model responses (muse-spark): Responses API
     responses: {
@@ -123,7 +123,8 @@ async function streamResponses(up, down, model) {
 export async function handleZen(body, model, assets, res, log) {
   // Failover: thu model dang chon truoc, hong thi sang model verified tiep theo.
   // Tra ve model THAT da dung (Claude chap nhan mismatch, da verify).
-  const candidates = [ZEN_MODEL, ...ZEN_VERIFIED.filter((m) => m !== ZEN_MODEL)];
+  // Doc runtime moi request de doi model luc dang chay (POST /admin/switch).
+  const candidates = [runtime.zenModel, ...ZEN_VERIFIED.filter((m) => m !== runtime.zenModel)];
   let lastErr = null;
   for (const candidate of candidates) {
     const useResponses = RESPONSES_MODELS.has(candidate);

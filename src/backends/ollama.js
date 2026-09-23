@@ -1,6 +1,6 @@
 // backends/ollama.js — Ollama OpenAI-compat (/v1/chat/completions).
 // (Ollama >= v0.14 noi native Anthropic, nhung di qua day de dong nhat behavior/log.)
-import { OLLAMA_BASE, OLLAMA_MODEL } from "../config.js";
+import { OLLAMA_BASE, runtime } from "../config.js";
 import { ApiError } from "../errors.js";
 import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic } from "../translators/openai.js";
 import { collectOpenAi, streamOpenAi } from "../sse.js";
@@ -14,9 +14,9 @@ function mapToolChoice(c) {
 }
 
 export async function handleOllama(body, model, res, log) {
-  if (!OLLAMA_MODEL) throw ApiError.misconfigured("chua chon model ollama (OLLAMA_MODEL)");
+  if (!runtime.ollamaModel) throw ApiError.misconfigured("chua chon model ollama (OLLAMA_MODEL)");
   const payload = {
-    model: OLLAMA_MODEL,
+    model: runtime.ollamaModel,
     messages: toOpenAiMessages(body.system, body.messages),
     stream: true, // luon stream upstream, gom lai neu client can non-stream
   };
