@@ -191,15 +191,29 @@ async function zenModels() {
   } catch { return null; }
 }
 
+async function waitReady(port, ms = 15000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/v1/models`);
+      if (r.ok) return true;
+    } catch {}
+  }
+  return false;
+}
+
 async function main() {
   await autoUpdate();
   ensureLocalhostBypass();
   console.log("== chon backend cho plugin zen-backend ==");
   console.log("1. Ollama TRUC TIEP (khong qua plugin) - can ollama + model da pull");
   console.log("2. OpenCode Zen free tier (qua plugin, localhost)");
-  console.log("3. Exit");
-  const pick = await ask("chon [1/2/3]: ");
-  if (pick === "3") { rl.close(); return; }
+  console.log("3. OpenAI-compatible custom (Pollinations keyless / Groq / Cerebras / NVIDIA...)");
+  console.log("4. Exit");
+  const pick = await ask("chon [1/2/3/4]: ");
+  if (pick === "4") { rl.close(); return; }
+  if (pick !== "1" && pick !== "2" && pick !== "3") { rl.close(); return; }
 
   if (pick === "1") {
     // Ollama noi native /v1/messages tu v0.14 -> di thang, khong can proxy.
@@ -233,7 +247,33 @@ async function main() {
     return;
   }
 
-  if (pick !== "2") { rl.close(); return; }
+  if (pick !== "2" && pick !== "3") { rl.close(); return; }
+  if (pick === "3") {
+    // OpenAI-compatible custom: Pollinations mac dinh (keyless), hoac bat ky endpoint nao.
+    const url = (await ask("chat-completions URL [https://text.pollinations.ai/openai]: ")) || "https://text.pollinations.ai/openai";
+    const key = await ask("API key (bo trong neu khong can, vd Pollinations): ");
+    const model = (await ask("model [openai]: ")) || "openai";
+    const cfg = loadSettings();
+    cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
+    delete cfg.modelOverrides[ALIAS];
+    cfg.env = {
+      ...(cfg.env || {}),
+      ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+      ANTHROPIC_API_KEY: "public",
+      ANTHROPIC_MODEL: ALIAS,
+    };
+    saveSettings(cfg);
+    console.log(`da patch ${CLAUDE_SETTINGS} (di qua plugin -> ${url})`);
+    rl.close();
+    const env = { ...process.env, PORT: String(PORT), BACKEND: "openai", OPENAI_URL: url, OPENAI_MODEL: model };
+    if (key) env.OPENAI_KEY = key;
+    console.log(`\nbackend=openai model=${model}\nMo terminal khac chay claude (settings.json da co san env).\n`);
+    const p = spawn(process.execPath, [path.join(HERE, "plugin.mjs")], { env, stdio: "inherit" });
+    if (await waitReady(PORT)) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+    else console.log(`\nCANH BAO: plugin chua nghe sau 15s. Kiem tra log o tren.`);
+    p.on("exit", (c) => process.exit(c ?? 0));
+    return;
+  }
   // --- backend zen: BAT BUOC qua proxy (free tier gate chi pass request dang opencode) ---
   let models = await zenModels();
   const { set: verified, at: verifiedAt } = verifiedSet();
@@ -280,16 +320,7 @@ async function main() {
   console.log(`\nbackend=zen model=${target}\nneu muon go tay thay vi dung settings:\n  ` + claudeEnvLines(`http://127.0.0.1:${PORT}`, ALIAS).join("\n  ") + "\n");
   const p = spawn(process.execPath, [path.join(HERE, "plugin.mjs")], { env, stdio: "inherit" });
   // doi plugin ready roi moi bao user chay claude (tranh Connection refused do start chua xong)
-  const t0 = Date.now();
-  let ready = false;
-  while (Date.now() - t0 < 15000) {
-    await new Promise((r) => setTimeout(r, 500));
-    try {
-      const r = await fetch(`http://127.0.0.1:${PORT}/v1/models`);
-      if (r.ok) { ready = true; break; }
-    } catch {}
-  }
-  if (ready) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+  if (await waitReady(PORT)) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
   else console.log(`\nCANH BAO: plugin chua nghe sau 15s (port ${PORT} bi chiem? loi start?). Kiem tra log o tren.`);
   p.on("exit", (c) => process.exit(c ?? 0));
 }

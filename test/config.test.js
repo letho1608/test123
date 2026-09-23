@@ -1,7 +1,7 @@
 // test/config.test.js — hang so + assets (khong can mang)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets } from "../src/config.js";
+import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets, OPENAI_URL, OPENAI_MODEL } from "../src/config.js";
 
 describe("config", () => {
   it("default hop le", () => {
@@ -21,6 +21,10 @@ describe("config", () => {
   });
   it("hang so ID la so", () => {
     assert.ok(Number.isFinite(T_SES) && Number.isFinite(M_MSG));
+  });
+  it("openai mac dinh la Pollinations keyless", () => {
+    assert.ok(OPENAI_URL.includes("pollinations.ai"));
+    assert.ok(OPENAI_MODEL.length > 0);
   });
   it("loadAssets doc du lieu that", () => {
     const a = loadAssets();

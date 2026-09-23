@@ -58,10 +58,12 @@ Menu:
 
 Chọn `1` → liệt kê `ollama list` để pick model, rồi tự `ollama cp` sang tên
 dạng `claude-*` (Claude Code chỉ gửi đi tên model bắt đầu bằng `claude-`,
-còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không proxy.**
+còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không qua plugin.**
 Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
-nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`
-(model duy nhất đã verify end-to-end; model khác có thể 401/500 do endpoint/SDK khác).
+nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`.
+Chọn `3` → OpenAI-compatible custom: mặc định là **Pollinations (keyless)**,
+hoặc nhập URL/key/model bất kỳ (Groq, Cerebras, NVIDIA NIM, OpenRouter `:free`,
+HuggingFace router...). Đi qua plugin để dịch protocol.
 Trên Linux còn hỏi thêm có cài systemd service chạy nền luôn không (khỏi giữ terminal).
 
 `start.js` sẽ:

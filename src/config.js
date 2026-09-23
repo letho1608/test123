@@ -15,11 +15,10 @@ function num(name, def) {
   return Number.isFinite(v) && v > 0 ? v : def;
 }
 
-export const BACKEND = (() => {
-  const b = str("BACKEND", "zen").toLowerCase();
-  if (!["zen", "ollama"].includes(b)) throw new Error(`BACKEND khong hop le: ${b} (chon zen|ollama)`);
-  return b;
-})();
+export const _b = str("BACKEND", "zen").toLowerCase();
+if (!["zen", "ollama", "openai"].includes(_b)) throw new Error(`BACKEND khong hop le: ${_b} (chon zen|ollama|openai)`);
+const BACKEND = _b;
+export { BACKEND };
 export const PORT = (() => {
   for (const src of [process.env.PORT, process.argv[2]]) {
     const v = Number(src);
@@ -56,6 +55,13 @@ export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-fr
 export const OLLAMA_BASE = str("OLLAMA_BASE", "http://127.0.0.1:11434/v1").replace(/\/+$/, "");
 export const OLLAMA_MODEL = str("OLLAMA_MODEL", "");
 
+// --- openai-compatible generic (Pollinations keyless + Groq/Cerebras/NVIDIA/OpenRouter/HF... co key) ---
+// OPENAI_URL la FULL chat-completions URL (vd https://text.pollinations.ai/openai
+// hoac https://api.groq.com/openai/v1/chat/completions).
+export const OPENAI_URL = str("OPENAI_URL", "https://text.pollinations.ai/openai");
+export const OPENAI_KEY = str("OPENAI_KEY", "");
+export const OPENAI_MODEL = str("OPENAI_MODEL", "openai");
+
 // --- model hien trong /model picker (alias Claude + zen default) ---
 export const MODEL_IDS = [
   ZEN_MODEL,
@@ -69,6 +75,9 @@ export const runtime = {
   backend: BACKEND,
   zenModel: ZEN_MODEL,
   ollamaModel: OLLAMA_MODEL,
+  openaiUrl: OPENAI_URL,
+  openaiKey: OPENAI_KEY,
+  openaiModel: OPENAI_MODEL,
 };
 
 // --- ID time-ordered cua opencode (dao nguoc tu DB + traffic):

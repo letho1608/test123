@@ -3,12 +3,13 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED } from "./config.js";
+import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED, OPENAI_URL } from "./config.js";
 import { logger } from "./logger.js";
 import { ApiError, validateMessagesBody } from "./errors.js";
 import { loadAssets } from "./config.js";
 import { handleZen } from "./backends/zen.js";
 import { handleOllama } from "./backends/ollama.js";
+import { handleOpenAi } from "./backends/openai.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -68,8 +69,9 @@ async function diag() {
 
 function statusPage() {
   const b = runtime.backend;
-  const model = b === "ollama" ? runtime.ollamaModel : runtime.zenModel;
-  const where = b === "ollama" ? `${model} @ ${OLLAMA_BASE}` : `${model} @ ${ZEN_BASE}`;
+  const where = b === "ollama" ? `${runtime.ollamaModel} @ ${OLLAMA_BASE}`
+    : b === "openai" ? `${runtime.openaiModel} @ ${runtime.openaiUrl}`
+    : `${runtime.zenModel} @ ${ZEN_BASE}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>zen-backend plugin</title></head><body style="font-family:sans-serif;max-width:640px;margin:40px auto">`
     + `<h2>zen-backend plugin dang chay</h2>`
     + `<p>backend: <b>${b}</b> (${where})</p>`
@@ -96,14 +98,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && (pathname === "/admin/status")) {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, port: PORT, time: new Date().toISOString() }));
+      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, openaiUrl: runtime.openaiUrl, openaiModel: runtime.openaiModel, port: PORT, time: new Date().toISOString() }));
       return;
     }
     if (req.method === "POST" && pathname === "/admin/switch") {
       // Doi backend/model luc dang chay, khong can restart. Chi nghe localhost.
       const b = await readJson(req);
       if (b.backend !== undefined) {
-        if (!["zen", "ollama"].includes(b.backend)) throw ApiError.badRequest("backend phai la zen|ollama");
+        if (!["zen", "ollama", "openai"].includes(b.backend)) throw ApiError.badRequest("backend phai la zen|ollama|openai");
         runtime.backend = b.backend;
       }
       if (b.zenModel !== undefined) {
@@ -114,9 +116,15 @@ const server = http.createServer(async (req, res) => {
         if (typeof b.ollamaModel !== "string" || !b.ollamaModel) throw ApiError.badRequest("ollamaModel phai la string khac rong");
         runtime.ollamaModel = b.ollamaModel;
       }
-      logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} ollama=${runtime.ollamaModel || "-"}`);
+      for (const [k, out] of [["openaiUrl", "openaiUrl"], ["openaiKey", "openaiKey"], ["openaiModel", "openaiModel"]]) {
+        if (b[k] !== undefined) {
+          if (typeof b[k] !== "string") throw ApiError.badRequest(`${k} phai la string`);
+          runtime[out] = b[k];
+        }
+      }
+      logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} ollama=${runtime.ollamaModel || "-"} openai=${runtime.openaiModel || "-"} @ ${runtime.openaiUrl}`);
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel }));
+      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, openaiUrl: runtime.openaiUrl, openaiModel: runtime.openaiModel }));
       return;
     }
     if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
@@ -138,6 +146,9 @@ const server = http.createServer(async (req, res) => {
     if (backend === "ollama") {
       if (!runtime.ollamaModel) throw ApiError.misconfigured("chua chon model ollama (doi qua /admin/switch hoac env OLLAMA_MODEL)");
       return handleOllama(body, model, res, log);
+    }
+    if (backend === "openai") {
+      return handleOpenAi(body, model, res, log, { url: runtime.openaiUrl, apiKey: runtime.openaiKey, model: runtime.openaiModel });
     }
     return handleZen(body, model, assets, res, log);
   } catch (e) {

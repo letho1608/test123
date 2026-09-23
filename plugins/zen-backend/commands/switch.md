@@ -1,6 +1,6 @@
 ---
 description: Đổi backend/model lúc đang chạy (zen <-> ollama) mà không restart plugin
-argument-hint: "[ollama <model> [alias] | zen [model] | status]"
+argument-hint: "[ollama <model> [alias] | zen [model] | openai [url] [key] [model] | status]"
 ---
 
 Đổi backend hoặc model của plugin `zen-backend` đang chạy ở `http://127.0.0.1:8898`
@@ -22,6 +22,11 @@ Cách làm (chạy shell thật, không nói suông):
    - `POST http://127.0.0.1:8898/admin/switch` body
      `{"backend":"ollama","ollamaModel":"<model>"}` (để plugin cùng trạng thái,
      dù request Claude lúc này đi thẳng Ollama không qua plugin).
+3. Nếu là `openai [url] [key] [model]` (bỏ trống cả 3 = Pollinations keyless):
+   - Cập nhật settings như mục Ollama nhưng `ANTHROPIC_BASE_URL=http://127.0.0.1:8898`
+     (đi qua plugin, vì cần dịch protocol), `ANTHROPIC_MODEL` giữ alias.
+   - `POST http://127.0.0.1:8898/admin/switch` body
+     `{"backend":"openai","openaiUrl":"...","openaiKey":"...","openaiModel":"..."}`.
 4. Báo lại kết quả + nhắc user: session Claude đang mở giữ model cũ,
    mở session mới (hoặc `/model`) để dùng model mới.
 

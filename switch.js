@@ -79,16 +79,40 @@ async function cmdOllama(model, alias) {
   console.log(`da patch ${p} -> ollama truc tiep ${model} (alias ${alias}), khong can proxy.`);
 }
 
+async function cmdOpenAi(url, key, model) {
+  url = url || "https://text.pollinations.ai/openai";
+  model = model || "openai";
+  const cfg = loadSettings();
+  cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
+  delete cfg.modelOverrides[ALIAS];
+  cfg.env = {
+    ...(cfg.env || {}),
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+    ANTHROPIC_API_KEY: "public",
+    ANTHROPIC_MODEL: ALIAS,
+  };
+  const p = saveSettings(cfg);
+  console.log(`da patch ${p} -> openai-compatible ${model} @ ${url}`);
+  try {
+    const s = await post("/admin/switch", { backend: "openai", openaiUrl: url, openaiKey: key || "", openaiModel: model });
+    console.log("plugin:", JSON.stringify(s.json));
+  } catch {
+    console.log("plugin chua chay (mo bang node start.js chon 3) - settings da luu, mo plugin la dung ngay.");
+  }
+}
+
 async function main() {
-  const [cmd, a, b] = process.argv.slice(2);
+  const [cmd, a, b, c] = process.argv.slice(2);
   if (cmd === "status") return cmdStatus();
   if (cmd === "zen") return cmdZen(a || "muse-spark-1.3-contributor-free");
   if (cmd === "ollama") return cmdOllama(a, b);
+  if (cmd === "openai") return cmdOpenAi(a, b, c);
   console.log([
     "dung: node switch.js <lenh>",
-    "  status                  xem backend/model proxy dang dung",
-    "  zen [model-zen]         doi sang Zen (can proxy dang chay; tu patch settings)",
-    "  ollama <model> [alias]  doi sang Ollama truc tiep (ollama cp + patch settings)",
+    "  status                       xem backend/model plugin dang dung",
+    "  zen [model-zen]              doi sang Zen (can plugin dang chay; tu patch settings)",
+    "  ollama <model> [alias]       doi sang Ollama truc tiep (ollama cp + patch settings)",
+    "  openai [url] [key] [model]   doi sang OpenAI-compat (mac dinh Pollinations keyless)",
   ].join("\n"));
 }
 main();
