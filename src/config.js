@@ -84,16 +84,17 @@ function loadJsonArray(rel) {
   return d;
 }
 export function loadAssets() {
+  // Du lieu fingerprint nam trong assets/ (khong de lung tung o root).
   let agentdev = null;
-  try { agentdev = loadText("agentdev.txt", 5000, null); } catch {}
+  try { agentdev = loadText("assets/agentdev.txt", 5000, null); } catch {}
   if (!agentdev) {
     // fallback ngan: chi chat text (khong tools) — lay tu title prompt
-    const raw = fs.readFileSync(path.join(ROOT, "fp.json"), "utf8");
+    const raw = fs.readFileSync(path.join(ROOT, "assets", "fp.json"), "utf8");
     const fp = JSON.parse(raw).fingerprint || raw;
-    if (fp.length < 100) throw new Error("fp.json khong dung");
+    if (fp.length < 100) throw new Error("assets/fp.json khong dung");
     agentdev = fp;
   }
   let decoys = [];
-  try { decoys = loadJsonArray("decoy_tools.json"); } catch {}
+  try { decoys = loadJsonArray("assets/decoy_tools.json"); } catch {}
   return { agentdev, decoys };
 }

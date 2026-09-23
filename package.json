@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node start.js",
-    "proxy": "node proxy.mjs",
+    "plugin": "node plugin.mjs",
     "test": "node --test \"test/*.test.js\""
   },
   "license": "MIT"

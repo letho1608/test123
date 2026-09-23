@@ -46,11 +46,11 @@ async function testOne(model, port) {
     HOME: home, USERPROFILE: home,
     PORT: String(port), BACKEND: "zen", ZEN_MODEL: model,
   };
-  const proxy = spawn(process.execPath, [path.join(HERE, "proxy.mjs")],
+  const proxy = spawn(process.execPath, [path.join(HERE, "..", "plugin.mjs")],
     { env, stdio: "ignore" });
   const t0 = Date.now();
   try {
-    if (!await waitReady(port)) return { ok: false, ms: Date.now() - t0, note: "proxy khong ready" };
+    if (!await waitReady(port)) return { ok: false, ms: Date.now() - t0, note: "plugin khong ready" };
     const want = "E2E-OK-" + crypto.randomBytes(3).toString("hex").toUpperCase();
     const file = "e2e_ok.txt";
     const childEnv = {

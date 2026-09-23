@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 const PORT = Number(process.env.PORT || process.argv[2] || 8898);
-const SERVICE = process.env.SERVICE || "zen-claude-proxy";
+const SERVICE = process.env.SERVICE || "zen-backend";
 const STATE_FILE = path.join(os.tmpdir(), "zen-health-fails.json");
 
 function loadFails() {

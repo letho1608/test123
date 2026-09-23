@@ -122,26 +122,26 @@ async function setupSystemd(envExtra) {
   fs.mkdirSync(sysd, { recursive: true });
   const envLines = Object.entries({ PORT: String(PORT), ...envExtra })
     .map(([k, v]) => `Environment=${k}=${v}`).join("\n");
-  const svc = `[Unit]\nDescription=zen-claude-proxy (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
-    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\nExecStart=${process.execPath} ${path.join(HERE, "proxy.mjs")}\n${envLines}\n`
+  const svc = `[Unit]\nDescription=zen-backend plugin (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
+    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\nExecStart=${process.execPath} ${path.join(HERE, "plugin.mjs")}\n${envLines}\n`
     + `Restart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=default.target\n`;
-  fs.writeFileSync(path.join(sysd, "zen-claude-proxy.service"), svc);
+  fs.writeFileSync(path.join(sysd, "zen-backend.service"), svc);
   for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {
     try { fs.copyFileSync(path.join(HERE, f), path.join(sysd, f)); } catch {}
   }
   const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   run(["daemon-reload"]);
-  const en = run(["enable", "--now", "zen-claude-proxy"]);
+  const en = run(["enable", "--now", "zen-backend"]);
   if (en.status !== 0) {
     console.error("enable service that bai:", (en.stderr || "").slice(0, 300));
     console.log("lam tay theo INSTALL-UBUNTU.txt muc 7.");
     return false;
   }
   run(["enable", "--now", "zen-claude-healthcheck.timer"]);
-  const st = run(["is-active", "zen-claude-proxy"]);
-  console.log(`\nservice zen-claude-proxy: ${(st.stdout || "").trim() || "unknown"}`);
-  console.log(`xem log: journalctl --user -u zen-claude-proxy -f`);
-  console.log(`tat: systemctl --user stop zen-claude-proxy`);
+  const st = run(["is-active", "zen-backend"]);
+  console.log(`\nservice zen-backend: ${(st.stdout || "").trim() || "unknown"}`);
+  console.log(`xem log: journalctl --user -u zen-backend -f`);
+  console.log(`tat: systemctl --user stop zen-backend`);
   return true;
 }
 
@@ -201,9 +201,9 @@ async function zenModels() {
 async function main() {
   await autoUpdate();
   ensureLocalhostBypass();
-  console.log("== chon backend cho Claude Code (khong proxy neu duoc) ==");
-  console.log("1. Ollama TRUC TIEP (khong proxy) - can ollama + model da pull");
-  console.log("2. OpenCode Zen free tier (qua proxy localhost)");
+  console.log("== chon backend cho plugin zen-backend ==");
+  console.log("1. Ollama TRUC TIEP (khong qua plugin) - can ollama + model da pull");
+  console.log("2. OpenCode Zen free tier (qua plugin, localhost)");
   console.log("3. Exit");
   const pick = await ask("chon [1/2/3]: ");
   if (pick === "3") { rl.close(); return; }
@@ -273,20 +273,20 @@ async function main() {
   rl.close();
   // Linux: hoi cai systemd service chay nen luon khoi giu terminal
   if (!IS_WIN && (await setupSystemd({ BACKEND: "zen", ZEN_MODEL: target }))) return;
-  // preflight: port da co proxy minh chay san thi dung lai, khoi spawn chong
+  // preflight: port da co plugin chay san thi dung lai, khoi spawn chong
   try {
     const r = await fetch(`http://127.0.0.1:${PORT}/v1/models`);
     const j = await r.json();
     if (r.ok && j && j.object === "list") {
-      console.log(`\nproxy da chay san o port ${PORT} -> dung lai, khoi start moi.`);
+      console.log(`\nplugin da chay san o port ${PORT} -> dung lai, khoi start moi.`);
       console.log(`Mo terminal khac chay claude (settings.json da co san env).`);
       return;
     }
   } catch {}
   const env = { ...process.env, PORT: String(PORT), BACKEND: "zen", ZEN_MODEL: target };
   console.log(`\nbackend=zen model=${target}\nneu muon go tay thay vi dung settings:\n  ` + claudeEnvLines(`http://127.0.0.1:${PORT}`, ALIAS).join("\n  ") + "\n");
-  const p = spawn(process.execPath, [path.join(HERE, "proxy.mjs")], { env, stdio: "inherit" });
-  // doi proxy ready roi moi bao user chay claude (tranh Connection refused do start chua xong)
+  const p = spawn(process.execPath, [path.join(HERE, "plugin.mjs")], { env, stdio: "inherit" });
+  // doi plugin ready roi moi bao user chay claude (tranh Connection refused do start chua xong)
   const t0 = Date.now();
   let ready = false;
   while (Date.now() - t0 < 15000) {
@@ -296,8 +296,8 @@ async function main() {
       if (r.ok) { ready = true; break; }
     } catch {}
   }
-  if (ready) console.log(`\nproxy READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
-  else console.log(`\nCANH BAO: proxy chua nghe sau 15s (port ${PORT} bi chiem? loi start?). Kiem tra log o tren.`);
+  if (ready) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+  else console.log(`\nCANH BAO: plugin chua nghe sau 15s (port ${PORT} bi chiem? loi start?). Kiem tra log o tren.`);
   p.on("exit", (c) => process.exit(c ?? 0));
 }
 main();

@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/zen-claude-proxy
-ExecStart=/usr/bin/node %h/zen-claude-proxy/proxy.mjs
+ExecStart=/usr/bin/node %h/zen-claude-proxy/plugin.mjs
 Environment=BACKEND=zen
 Environment=PORT=8898
 # Backend Ollama thi doi 2 dong tren thanh:

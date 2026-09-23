@@ -1,11 +1,26 @@
-# zen-claude-proxy
+# zen-backend plugin (thuộc marketplace zen-claude-tools)
 
-Chạy model **OpenCode Zen free tier** (`muse-spark-1.3-contributor-free`) hoặc **Ollama** local
-bên trong **Claude Code**.
+Plugin cho **Claude Code**: dùng model **OpenCode Zen free tier** (8 model đã verify)
+hoặc **Ollama** local ngay trong Claude Code, không cần key.
 
-- **Ollama (từ v0.14): nói native Anthropic `/v1/messages` → đi thẳng, KHÔNG proxy.**
-- **Zen free tier: bắt buộc qua proxy** (free tier gate chỉ pass request đúng dạng opencode).
-  Proxy và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows lẫn Ubuntu.
+## Cài plugin (Ubuntu + Windows giống nhau)
+
+Trong Claude Code, gõ:
+
+```text
+/plugin marketplace add letho1608/test123
+/plugin install zen-backend@zen-claude-tools
+```
+
+Không mạng ra GitHub thì dùng thư mục local (sau khi `git clone` repo này),
+mở Claude Code tại thư mục cha của repo rồi gõ:
+
+```text
+/plugin marketplace add ./zen-claude-proxy
+/plugin install zen-backend@zen-claude-tools
+```
+
+Xong gọi skill `/zen-backend:zen-models` khi cần đổi model free / hết quota.
 
 ## Yêu cầu
 
@@ -68,7 +83,7 @@ proxy tự route sang model backend đã chọn.
 ## Cấu trúc code
 
 ```text
-proxy.mjs            entry point mỏng (gọi src/server.js)
+plugin.mjs           entry point mỏng (gọi src/server.js)
 src/
   config.js          mọi cấu hình + validate env, hằng số, load assets
   logger.js          log theo level (debug/info/warn/error)
@@ -80,11 +95,16 @@ src/
     openai.js        Anthropic <-> Chat Completions (ollama + zen-chat)
   sse.js             đọc SSE + khung SSE Anthropic (dùng chung 2 backend)
   backends/
-    zen.js           Zen free tier (fingerprint, retry, route /responses|/chat)
+    zen.js           Zen free tier (fingerprint, retry, failover, route /responses|/chat)
     ollama.js        Ollama OpenAI-compat
   server.js          routes, validation, graceful shutdown, /diag
+assets/              prompt/tools mẫu cho free-tier gate (agentdev.txt, decoy_tools.json, fp.json)
+deploy/              systemd units (zen-backend.service, healthcheck.*)
+scripts/             healthcheck.mjs, test-e2e.js (kiểm định tool-loop thật)
+plugins/zen-backend  plugin Claude (marketplace + skill zen-models)
 test/                unit test offline (`npm test`, vài giây)
-test-e2e.js          kiểm định tool-loop thật (`node test-e2e.js [model|all]`)
+models.json          danh sách model free + route endpoint (1 nguồn duy nhất)
+verified.json        kết quả test-e2e (menu đọc để gắn tag)
 ```
 
 ## Kiểm định model (verified không còn hardcode)
@@ -98,18 +118,20 @@ rồi ghi kết quả vào `verified.json`. Menu `start.js` đọc file này đ�
   Lưu ý: quét dồn dập có thể ăn `429 FreeUsageLimitError` (rate limit phía Zen) —
   đợi vài phút chạy lại con đó là pass.
 
-## Backend Zen hoạt động thế nào
+## Plugin backend Zen hoạt động thế nào
 
-Free tier Zen không check API key mà check "độ giống opencode". Proxy tự route
+Free tier Zen không check API key mà check "độ giống opencode". Plugin backend tự route
 mỗi model đúng endpoint của nó:
 
 - `muse-spark-1.3/1.2-contributor-free` → `/responses` (prompt agent + 6 tools mồi)
 - `nemotron-3-ultra/3.5-lightning-free`, `mimo-v2.6/v2.5-flash-free`, `big-pickle`,
-  `ling-3.0-flash-fin-free` → `/chat/completions` (prompt agent + đủ 42 tools opencode)
+  `ling-3.0-flash-fin-free` → `/chat/completions` (prompt agent + 6 tools mồi)
 
 Điểm chung bắt buộc: `Authorization: Bearer public` + header `x-opencode-*` với
-`ses_/msg_` ID đúng format time-ordered (proxy tự mint, không cần binary),
+`ses_/msg_` ID đúng format time-ordered (backend tự mint, không cần binary),
 `stream: true`, `tool_choice: "auto". Model free còn lại trả `401 Model is not supported`.
+
+Backend và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows lẫn Ubuntu.
 
 ## Lưu ý
 
@@ -120,13 +142,13 @@ mỗi model đúng endpoint của nó:
 
 ## Lỗi thường gặp
 
-**`API Error: Connection refused` trong Claude Code** = Claude không nối được tới proxy.
-99% là do proxy **chưa chạy** (mỗi terminal mới phải start proxy trước), hoặc lệch port:
+**`API Error: Connection refused` trong Claude Code** = Claude không nối được tới plugin backend.
+99% là do backend **chưa chạy** (mỗi terminal mới phải start trước), hoặc lệch port:
 
-1. Kiểm tra proxy có nghe không:
+1. Kiểm tra backend có nghe không:
    - Windows (PowerShell): `curl.exe -s http://127.0.0.1:8898/`
    - Ubuntu: `curl -s http://127.0.0.1:8898/`
-   - Phải thấy dòng `zen-claude-proxy dang chay`. Nếu `Connection refused` → chạy `node start.js` (chọn 2) trước rồi mới mở Claude.
+   - Phải thấy trang `zen-backend plugin dang chay`. Nếu `Connection refused` → chạy `node start.js` (chọn 2) trước rồi mới mở Claude.
 2. Kiểm tra đường ra mạng của máy: mở `http://127.0.0.1:8898/diag` trên browser —
    xem `zen_models.ok` có `true` không. Nếu `false`, đọc `error` trong đó (DNS/timeout/...)
    rồi gửi output cho người debug.

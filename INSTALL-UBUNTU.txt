@@ -2,7 +2,21 @@ HƯỚNG DẪN CÀI ĐẶT TRÊN UBUNTU (22.04 / 24.04)
 =============================================
 Copy từng khối lệnh dưới đây, chạy theo thứ tự. Không cần sudo trừ chỗ có ghi.
 
---- 1. Cài Node.js 22 (proxy chỉ cần Node >= 18, không cần thêm gì) ---
+--- 0. Cài plugin vào Claude Code (Ubuntu + Windows làm giống nhau) ---
+# Plugin zen-backend chứa skill hướng dẫn dùng model free (không bắt buộc để chạy,
+# nhưng nên cài để Claude tự biết cách xử lý khi hết quota / cần đổi model).
+# Cách 1 — từ GitHub (cần mạng ra github.com):
+#   Mở Claude Code, gõ:
+#     /plugin marketplace add letho1608/test123
+#     /plugin install zen-backend@zen-claude-tools
+# Cách 2 — từ thư mục local (offline, sau khi đã git clone ở mục 4):
+#   Mở Claude Code TẠI THƯ MỤC CHA của repo (vd ~/ hoặc C:\Users\Admin), gõ:
+#     /plugin marketplace add ./zen-claude-proxy
+#     /plugin install zen-backend@zen-claude-tools
+# Xong gõ /reload-plugins (nếu nó yêu cầu) rồi dùng skill: /zen-backend:zen-models
+# Windows hay Ubuntu lệnh y hệt nhau (chạy BÊN TRONG Claude Code, không phải shell).
+
+--- 1. Cài Node.js 22 (plugin chỉ cần Node >= 18, không cần thêm gì) ---
 sudo apt update
 sudo apt install -y curl git
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -18,62 +32,62 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3:8b
 # kiểm tra: ollama list
 # Lưu ý: Ollama từ v0.14 nói native Anthropic /v1/messages nên Claude Code
-# đi thẳng, KHÔNG qua proxy. Còn Zen free tier thì bắt buộc qua proxy.
+# đi thẳng, KHÔNG qua plugin backend. Còn Zen free tier thì bắt buộc qua plugin.
 
---- 4. Lấy code proxy ---
+--- 4. Lấy code plugin ---
 git clone https://github.com/letho1608/test123.git zen-claude-proxy
 cd zen-claude-proxy
-node --check proxy.mjs && node --check start.js && echo OK
+node --check plugin.mjs && node --check start.js && echo OK
 
---- 5. Chạy proxy (menu) ---
+--- 5. Chạy plugin backend (menu) ---
 node start.js
 # menu hiện ra:
 #   1. Ollama (model đã cài trên máy)   -> chọn số thứ tự model trong `ollama list`
 #   2. OpenCode Zen free tier (muse-spark-1.3-contributor-free, không cần key)
 #   3. Exit
 # start.js sẽ tự patch ~/.claude/settings.json (merge modelOverrides, giữ các key khác)
-# rồi start proxy ở http://127.0.0.1:8898 và in lệnh chạy Claude.
+# rồi start plugin backend ở http://127.0.0.1:8898 và in lệnh chạy Claude.
 
 --- 6. Chạy Claude Code (terminal khác, cùng máy) ---
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5
 claude
 # (Tên claude-sonnet-4-5 chỉ là alias để Claude chịu validate — request thực tế
-#  proxy tự route sang model backend đã chọn ở bước 5. start.js cũng đã nhúng
+#  plugin backend tự route sang model đã chọn ở bước 5. start.js cũng đã nhúng
 #  sẵn 3 biến này vào ~/.claude/settings.json nên thường mở `claude` là chạy.)
 
 --- 7. Chạy nền bằng systemd (khỏi giữ terminal, tự restart khi crash) ---
 # Cách nhanh (tắt terminal là chết theo, không tự restart):
-#   cd ~/zen-claude-proxy && nohup node proxy.mjs > proxy.out 2>&1 &
+#   cd ~/zen-claude-proxy && nohup node plugin.mjs > plugin.out 2>&1 &
 # Cách chuẩn (khuyên dùng):
 mkdir -p ~/.config/systemd/user
-cp ~/zen-claude-proxy/zen-claude-proxy.service ~/.config/systemd/user/
+cp ~/zen-claude-proxy/deploy/zen-backend.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now zen-claude-proxy
-systemctl --user status zen-claude-proxy   # phai thay active (running)
-journalctl --user -u zen-claude-proxy -f   # xem log truc tiep
+systemctl --user enable --now zen-backend
+systemctl --user status zen-backend   # phai thay active (running)
+journalctl --user -u zen-backend -f   # xem log truc tiep
 # Tat terminal/SSH van chay tiep? chay them lenh nay 1 lan:
 loginctl enable-linger $USER
 # Dung/tat service:
-#   systemctl --user stop zen-claude-proxy
-#   systemctl --user disable zen-claude-proxy
+#   systemctl --user stop zen-backend
+#   systemctl --user disable zen-backend
 # Doi backend sang Ollama: sua 2 dong Environment trong file service
 # (BACKEND=ollama, OLLAMA_MODEL=<ten-model>) roi:
-#   systemctl --user daemon-reload && systemctl --user restart zen-claude-proxy
+#   systemctl --user daemon-reload && systemctl --user restart zen-backend
 # Luu y: file service gia dinh code o ~/zen-claude-proxy va node o /usr/bin/node
 # (dung chuan neu cai theo muc 1). Kiem tra: which node
 
 --- 8. Healthcheck tự động (tùy chọn, khuyên dùng) ---
 # Mỗi 5 phút gọi /diag 1 lần; fail 2 lần liên tiếp thì tự restart service.
-cp ~/zen-claude-proxy/zen-claude-healthcheck.service ~/zen-claude-proxy/zen-claude-healthcheck.timer ~/.config/systemd/user/
+cp ~/zen-claude-proxy/deploy/zen-claude-healthcheck.service ~/zen-claude-proxy/deploy/zen-claude-healthcheck.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now zen-claude-healthcheck.timer
 systemctl --user list-timers | grep healthcheck
-# Chạy tay 1 lần để thử: node ~/zen-claude-proxy/healthcheck.mjs
+# Chạy tay 1 lần để thử: node ~/zen-claude-proxy/scripts/healthcheck.mjs
 # (in OK là tốt; in FAIL 2 lần thì nó tự restart service)
 
 --- Ghi chú ---
-- Proxy bind 127.0.0.1: chỉ máy này gọi được, không lộ ra mạng ngoài, không cần mở firewall.
+- Plugin backend bind 127.0.0.1: chỉ máy này gọi được, không lộ ra mạng ngoài, không cần mở firewall.
 - Backend Zen không cần API key, không cần cài opencode.
 - Backend Ollama cần ollama đang chạy (mặc định http://127.0.0.1:11434).
 - Đổi port: PORT=9000 node start.js (nhớ đổi ANTHROPIC_BASE_URL theo).
-- Log proxy: proxy.log trong thư mục code.
+- Log plugin backend: proxy.log trong thư mục code.
