@@ -13,7 +13,7 @@ import { handleOllama } from "./backends/ollama.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const assets = loadAssets();
-logger.info(`assets: agentdev=${assets.agentdev.length} chars, decoys=${assets.decoys.length}, tools42=${assets.tools42.length}`);
+logger.info(`assets: agentdev=${assets.agentdev.length} chars, decoys=${assets.decoys.length}`);
 
 function sendError(res, err) {
   const api = err instanceof ApiError ? err : ApiError.internal(String(err?.message || err).slice(0, 300));

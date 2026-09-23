@@ -8,7 +8,7 @@ import { ApiError } from "../errors.js";
 import { mintSes, mintMsg } from "../ids.js";
 import { textOf, toToolUseBlock } from "../translators/anthropic.js";
 import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../translators/responses.js";
-import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic } from "../translators/openai.js";
+import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, decoysToOpenAi } from "../translators/openai.js";
 import { pumpSSE, anthropicFramer, collectResponses, collectOpenAi, streamOpenAi } from "../sse.js";
 
 export function buildZenPayloads(body, assets, modelId = ZEN_MODEL) {
@@ -30,7 +30,7 @@ export function buildZenPayloads(body, assets, modelId = ZEN_MODEL) {
       model: modelId,
       messages: toOpenAiMessages(combineSystem(assets.agentdev, body.system), body.messages),
       stream: true,
-      tools: [...assets.tools42, ...(toOpenAiTools(body.tools) || [])],
+      tools: [...decoysToOpenAi(assets.decoys), ...(toOpenAiTools(body.tools) || [])],
       tool_choice: "auto",
       ...(body.max_tokens ? { max_tokens: body.max_tokens } : {}),
     },

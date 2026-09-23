@@ -2,7 +2,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../src/translators/responses.js";
-import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic } from "../src/translators/openai.js";
+import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, decoysToOpenAi } from "../src/translators/openai.js";
 import { toToolUseBlock } from "../src/translators/anthropic.js";
 
 const FP = "FINGERPRINT";
@@ -74,6 +74,14 @@ describe("toOpenAiTools", () => {
     const [t] = toOpenAiTools([{ name: "X", description: "d", input_schema: { type: "object" } }]);
     assert.equal(t.function.parameters.type, "object");
   });
+});
+
+describe("decoysToOpenAi", () => {
+  it("doi dang Responses -> OpenAI, giu nguyen noi dung", () => {
+    const [t] = decoysToOpenAi([{ type: "function", name: "bash", description: "d", parameters: { type: "object" } }]);
+    assert.deepEqual(t, { type: "function", function: { name: "bash", description: "d", parameters: { type: "object" } } });
+  });
+  it("rong -> array rong", () => assert.deepEqual(decoysToOpenAi([]), []));
 });
 
 describe("openAiTurnToAnthropic", () => {

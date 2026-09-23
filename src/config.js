@@ -95,7 +95,5 @@ export function loadAssets() {
   }
   let decoys = [];
   try { decoys = loadJsonArray("decoy_tools.json"); } catch {}
-  let tools42 = [];
-  try { tools42 = loadJsonArray("tools42_oai.json"); } catch {}
-  return { agentdev, decoys, tools42 };
+  return { agentdev, decoys };
 }

@@ -1,0 +1,11 @@
+{
+  "name": "zen-backend",
+  "version": "1.0.0",
+  "description": "Dùng model OpenCode Zen free tier và Ollama local bên trong Claude Code (qua proxy localhost + đi thẳng Ollama)",
+  "author": {
+    "name": "letho1608"
+  },
+  "homepage": "https://github.com/letho1608/test123",
+  "license": "MIT",
+  "keywords": ["opencode-zen", "ollama", "free-models", "provider"]
+}

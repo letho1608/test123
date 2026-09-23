@@ -26,6 +26,5 @@ describe("config", () => {
     const a = loadAssets();
     assert.ok(a.agentdev.length > 5000);
     assert.ok(a.decoys.length >= 6);
-    assert.ok(a.tools42.length >= 6);
   });
 });

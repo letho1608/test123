@@ -45,6 +45,14 @@ export function toOpenAiTools(claudeTools) {
   }));
 }
 
+// decoy opencode (dang Responses) -> dang OpenAI (de gop vao tools chat)
+export function decoysToOpenAi(decoys) {
+  return (decoys || []).map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description || "", parameters: t.parameters || { type: "object" } },
+  }));
+}
+
 // accumulated OpenAI tool calls -> Anthropic content blocks (dung chung stream/non-stream)
 export function openAiCallsToBlocks(calls, toToolUse) {
   return calls.map((c) => toToolUse(c.id, c.name, c.args));
