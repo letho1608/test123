@@ -19,11 +19,11 @@ chỉ có proxy → opencode.ai:443 (backend Zen) là ra ngoài. Ollama thì off
    echo $HTTPS_PROXY   (Ubuntu)   /   $env:HTTPS_PROXY   (PowerShell)
 
 --- CASE A: MẠNG BẮT BUỘC QUA HTTP PROXY CÔNG TY ---
-Node 22+ tự đi qua proxy công ty khi có 2 biến này (proxy.mjs không cần sửa gì):
-  export NODE_USE_ENV_PROXY=1
-  export HTTPS_PROXY=http://proxy-cong-ty:8080
-  export NO_PROXY=127.0.0.1,localhost   # QUAN TRỌNG: giữ Claude->proxy đi thẳng
-start.js đã tự thêm localhost vào NO_PROXY nếu phát hiện proxy công ty.
+start.js TỰ XỬ LÝ case này, không cần làm tay: khi thấy HTTP_PROXY/HTTPS_PROXY,
+nó tự (1) thêm localhost vào NO_PROXY, (2) bật NODE_USE_ENV_PROXY để request
+ra Zen đi đúng cửa kiểm soát (cần Node >= 22). Chỉ cần chạy `node start.js` như thường.
+Làm tay (nếu cần debug): export NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://proxy-cong-ty:8080
+NO_PROXY=127.0.0.1,localhost rồi chạy.
 Thiếu NO_PROXY là lỗi hay gặp nhất: request localhost cũng bị đẩy vòng qua
 proxy công ty → refused/timeout rất khó hiểu.
 

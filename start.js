@@ -83,7 +83,10 @@ function ensureLocalhostBypass() {
     }
     process.env[k] = parts.join(",");
   }
-  console.log("(phat hien proxy cong ty - da giu localhost di thang, khong qua proxy cong ty)");
+  // Node >= 22 moi biet doc proxy env cho fetch(); bat len de request ra Zen di dung cua kiem soat.
+  // (Node cu hon thi bien nay vo dung nhung vo hai.)
+  if (!process.env.NODE_USE_ENV_PROXY) process.env.NODE_USE_ENV_PROXY = "1";
+  console.log("(phat hien proxy cong ty: giu localhost di thang + bat NODE_USE_ENV_PROXY cho request ra Zen)");
 }
 
 // Tu dong git pull (fast-forward) khi co ban moi tren remote. Khong mang thi bo qua im lang.
