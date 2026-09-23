@@ -40,6 +40,19 @@ Xin IT mở 2 domain này, port 443:
   models.opencode.ai   (menu start.js đọc list model; không mở vẫn chạy nếu đã biết tên model)
 Kiểm tra nhanh: curl -sI https://opencode.ai/zen/v1/models
 
+MẪU TICKET XIN MỞ (copy gửi IT, đính kèm output /diag):
+  Tieu de: Xin mo firewall cho 2 domain phuc vu lap trinh (port 443)
+  Noi dung:
+  - Em can truy cap 2 domain phuc vu cong viec lap trinh (goi API mo hinh AI):
+      1. opencode.ai (443/tcp) — bat buoc, goi API inference.
+      2. models.opencode.ai (443/tcp) — tuy chon, lay danh sach model;
+         khong mo van chay duoc (tool tu fallback).
+  - Luu luong: HTTPS ra (outbound) tu may tram, khong can mo inbound.
+  - Bang chung ky thuat ( output http://127.0.0.1:8898/diag ):
+      <paste output /diag vao day>
+  Code chi dung dung 2 domain tren (xem ZEN_BASE trong src/config.js),
+  khong goi di dau khac.
+
 --- CASE D: CHẶN HẲN AI / NGOÀI (không xin được gì) ---
 Dùng backend Ollama trong start.js (menu 1): 100% offline sau khi `ollama pull`,
 không cần mạng ngoài, không cần proxy trung gian. Đây là đường thoát cuối cùng.
