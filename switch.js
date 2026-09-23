@@ -102,7 +102,7 @@ async function cmdOpenAi(url, key, model) {
 }
 
 async function main() {
-  const [cmd, a, b, c] = process.argv.slice(2);
+  const [cmd, a, b, c, d] = process.argv.slice(2);
   if (cmd === "status") return cmdStatus();
   if (cmd === "zen") return cmdZen(a || "muse-spark-1.3-contributor-free");
   if (cmd === "ollama") return cmdOllama(a, b);
