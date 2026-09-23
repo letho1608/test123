@@ -31,7 +31,15 @@ const ask = (q) => {
     process.stdout.write(a + "\n");
     return Promise.resolve(a);
   }
-  return new Promise((r) => rl.question(q, (a) => r(a.trim())));
+  // stdin dong giua chung (EOF/khong TTY) -> readline tu close -> tra rong thay vi crash
+  if (rl.closed) return Promise.resolve("");
+  return new Promise((r) => {
+    try {
+      rl.question(q, (a) => r((a ?? "").trim()));
+    } catch {
+      r("");
+    }
+  });
 };
 
 function claudeEnvLines(baseUrl, model, authToken) {
