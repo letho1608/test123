@@ -109,7 +109,7 @@ verified.json        kết quả test-e2e (menu đọc để gắn tag)
 
 ## Kiểm định model (verified không còn hardcode)
 
-`node test-e2e.js [model-id | all]` — với mỗi model, script tự start proxy,
+`node scripts/test-e2e.js [model-id | all]` — với mỗi model, script tự start plugin,
 chạy Claude Code thật làm 1 task bắt buộc dùng tool (tạo file đúng nội dung),
 rồi ghi kết quả vào `verified.json`. Menu `start.js` đọc file này để gắn tag.
 
