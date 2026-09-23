@@ -2,7 +2,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../src/translators/responses.js";
-import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, decoysToOpenAi } from "../src/translators/openai.js";
+import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, decoysToOpenAi, mapToolChoice } from "../src/translators/openai.js";
 import { toToolUseBlock } from "../src/translators/anthropic.js";
 
 const FP = "FINGERPRINT";
@@ -82,6 +82,15 @@ describe("decoysToOpenAi", () => {
     assert.deepEqual(t, { type: "function", function: { name: "bash", description: "d", parameters: { type: "object" } } });
   });
   it("rong -> array rong", () => assert.deepEqual(decoysToOpenAi([]), []));
+});
+
+describe("mapToolChoice", () => {
+  it("any -> auto (khong required: deepseek gap required thi nha tool dang text)", () => {
+    assert.equal(mapToolChoice({ type: "any" }), "auto");
+    assert.equal(mapToolChoice(undefined), "auto");
+    assert.equal(mapToolChoice({ type: "none" }), "none");
+    assert.deepEqual(mapToolChoice({ type: "tool", name: "X" }), { type: "function", function: { name: "X" } });
+  });
 });
 
 describe("openAiTurnToAnthropic", () => {

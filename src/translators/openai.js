@@ -45,6 +45,16 @@ export function toOpenAiTools(claudeTools) {
   }));
 }
 
+// tool_choice Anthropic -> OpenAI. LUU Y: "any" phai ve "auto", KHONG "required":
+// deepseek (NVIDIA) gap required thi nha tool call dang text (finish stop)
+// thay vi tool_calls (da verify tay 2 che do).
+export function mapToolChoice(c) {
+  if (!c || c.type === "auto" || c.type === "any") return "auto";
+  if (c.type === "none") return "none";
+  if (c.type === "tool") return { type: "function", function: { name: c.name } };
+  return "auto";
+}
+
 // decoy opencode (dang Responses) -> dang OpenAI (de gop vao tools chat)
 export function decoysToOpenAi(decoys) {
   return (decoys || []).map((t) => ({

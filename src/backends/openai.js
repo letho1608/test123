@@ -2,16 +2,8 @@
 // (Ollama /v1/chat/completions, Pollinations /openai, Groq, Cerebras, NVIDIA...).
 // Dung chung 1 translator, khac nhau chi base URL + key + model.
 import { ApiError } from "../errors.js";
-import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic } from "../translators/openai.js";
+import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, mapToolChoice } from "../translators/openai.js";
 import { collectOpenAi, streamOpenAi } from "../sse.js";
-
-function mapToolChoice(c) {
-  if (!c || c.type === "auto") return "auto";
-  if (c.type === "any") return "required";
-  if (c.type === "none") return "none";
-  if (c.type === "tool") return { type: "function", function: { name: c.name } };
-  return "auto";
-}
 
 export async function handleOpenAi(body, model, res, log, opts) {
   const { url, apiKey, model: upstreamModel } = opts;
