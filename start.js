@@ -116,7 +116,9 @@ async function setupSystemd(envExtra) {
   const envLines = Object.entries({ PORT: String(PORT), ...envExtra })
     .map(([k, v]) => `Environment=${k}=${v}`).join("\n");
   const svc = `[Unit]\nDescription=zen-backend plugin (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
-    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\nExecStart=${process.execPath} ${path.join(HERE, "plugin.mjs")}\n${envLines}\n`
+    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\n`
+    + `ExecStartPre=-/usr/bin/git -C ${HERE} pull --ff-only --quiet\n`
+    + `ExecStart=${process.execPath} ${path.join(HERE, "plugin.mjs")}\n${envLines}\n`
     + `Restart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=default.target\n`;
   fs.writeFileSync(path.join(sysd, "zen-backend.service"), svc);
   for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {

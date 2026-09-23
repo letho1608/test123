@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/zen-claude-proxy
+ExecStartPre=-/usr/bin/git -C %h/zen-claude-proxy pull --ff-only --quiet
 ExecStart=/usr/bin/node %h/zen-claude-proxy/plugin.mjs
 Environment=BACKEND=zen
 Environment=PORT=8898
