@@ -5,3 +5,4 @@ harvest/
 *.bin
 *.log
 verified.local.json
+ANALYSIS.md
