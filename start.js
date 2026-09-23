@@ -91,6 +91,16 @@ async function autoUpdate() {
   };
   try {
     if (!fs.existsSync(path.join(HERE, ".git"))) return;
+    const dirty = git(["status", "--porcelain"]);
+    const dirtyFiles = ((dirty && dirty.stdout) || "").trim();
+    if (dirtyFiles) {
+      // Cay ban (vd test-e2e vua ghi verified.json) -> pull se loi.
+      // verified.local.json da gitignored nen test moi khong gay ra chuyen nay nua.
+      console.log("working tree dang ban, bo qua auto-pull. Muon update tay:");
+      console.log("  git stash push -m backup && git pull --ff-only && git stash pop");
+      console.log("  (khong can giu thay doi thi: git checkout -- . && git pull --ff-only)");
+      return;
+    }
     const fetch = git(["fetch", "origin", "--quiet"]);
     if (!fetch || fetch.status !== 0) return; // khong mang / khong remote
     const behind = git(["rev-list", "--count", "HEAD..@{u}"]);
@@ -153,14 +163,17 @@ const HARDCODED_VERIFIED = [
   "ling-3.0-flash-fin-free",
 ];
 const DEFAULT_ZEN = catalogZen().def;
-// verified.json (ket qua test-e2e that) uu tien hon models.json
+// verified.local.json (ket qua test-e2e tren chinh may nay) uu tien nhat,
+// roi den verified.json (ket qua chung trong repo), cuoi cung la hardcode.
 function verifiedSet() {
-  try {
-    const s = JSON.parse(fs.readFileSync(path.join(HERE, "verified.json"), "utf8"));
-    const ok = Object.entries(s.results || {}).filter(([, r]) => r && r.ok).map(([m]) => m);
-    if (ok.length) return { set: ok, at: s.updated };
-  } catch {}
-  return { set: catalogZen().verified, at: null };
+  for (const f of ["verified.local.json", "verified.json"]) {
+    try {
+      const s = JSON.parse(fs.readFileSync(path.join(HERE, f), "utf8"));
+      const ok = Object.entries(s.results || {}).filter(([, r]) => r && r.ok).map(([m]) => m);
+      if (ok.length) return { set: ok, at: s.updated, from: f };
+    } catch {}
+  }
+  return { set: catalogZen().verified, at: null, from: "hardcode" };
 }
 // Danh sach model mac dinh doc tu models.json (1 nguon duy nhat cho ca repo).
 function catalogZen() {

@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ARG = process.argv[2] || "muse-spark-1.3-contributor-free";
-const VERIFIED_FILE = path.join(HERE, "verified.json");
+// Ket qua test ghi ra verified.local.json (rieng may, gitignored) de khong lam
+// ban working tree -> git pull luon fast-forward duoc. Menu uu tien file nay.
+const VERIFIED_FILE = path.join(HERE, "..", "verified.local.json");
 const ALIAS = "claude-sonnet-4-5";
 const PER_MODEL_TIMEOUT = 5 * 60 * 1000;
 
