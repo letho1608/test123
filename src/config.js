@@ -80,6 +80,32 @@ export const runtime = {
   openaiModel: OPENAI_MODEL,
 };
 
+// Luu/khoi phuc runtime vao file local (rieng may, gitignored) de tat proxy
+// bat lai van giu backend/model cu (dashboard hien dung info cu).
+// RUNTIME_FILE chi dung cho test (tro sang file tam).
+// loadRuntime() goi TUONG MINH luc boot (proxy.mjs) / setup test, khong tu chay
+// luc import de unit test khong doc nham file local cua may dev.
+function runtimeFile() {
+  return process.env.RUNTIME_FILE || path.join(ROOT, "runtime.local.json");
+}
+export function loadRuntime() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(runtimeFile(), "utf8"));
+    if (!saved || typeof saved !== "object") return;
+    // Env truyen vao luc start (menu start.js / systemd) uu tien hon file cu.
+    const hasEnv = (n) => process.env[n] !== undefined && process.env[n] !== "";
+    if (["zen", "ollama", "openai"].includes(saved.backend) && !hasEnv("BACKEND")) {
+      runtime.backend = saved.backend;
+    }
+    for (const [k, env] of [["zenModel", "ZEN_MODEL"], ["ollamaModel", "OLLAMA_MODEL"], ["openaiUrl", "OPENAI_URL"], ["openaiKey", "OPENAI_KEY"], ["openaiModel", "OPENAI_MODEL"]]) {
+      if (typeof saved[k] === "string" && saved[k] && !hasEnv(env)) runtime[k] = saved[k];
+    }
+  } catch { /* chua co file -> dung env/mac dinh */ }
+}
+export function persistRuntime() {
+  try { fs.writeFileSync(runtimeFile(), JSON.stringify(runtime, null, 2)); } catch {}
+}
+
 // --- ID time-ordered cua opencode (dao nguoc tu DB + traffic):
 // ses_  = (T_SES - epoch_ms) * 4096 + 0xffe + 14 ky tu base62
 // msg_  = (epoch_ms - M_MSG) * 4096 + 0x001 + 14 ky tu base62

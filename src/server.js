@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED, ZEN_DEFAULT, OPENAI_URL } from "./config.js";
+import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED, ZEN_DEFAULT, OPENAI_URL, persistRuntime } from "./config.js";
 import { loadSettings, saveSettings } from "../scripts/lib/settings.js";
 import { logger } from "./logger.js";
 import { ApiError, validateMessagesBody } from "./errors.js";
@@ -253,6 +253,7 @@ const server = http.createServer(async (req, res) => {
         extra = applySwitch({ backend: next.backend, zenModel: next.zenModel, ollamaModel: next.ollamaModel, openaiUrl: next.openaiUrl, alias: b.alias });
       }
       Object.assign(runtime, next);
+      persistRuntime(); // tat proxy bat lai van giu info cu (dashboard hien dung)
       logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} ollama=${runtime.ollamaModel || "-"} openai=${runtime.openaiModel || "-"} @ ${runtime.openaiUrl}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, openaiUrl: runtime.openaiUrl, openaiModel: runtime.openaiModel, ...extra }));

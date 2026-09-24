@@ -5,4 +5,5 @@ harvest/
 *.bin
 *.log
 verified.local.json
+runtime.local.json
 ANALYSIS.md

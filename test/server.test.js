@@ -1,16 +1,23 @@
 // test/server.test.js — route /admin/* tren server that (port random, offline, khong can upstream)
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 let base;
 let mod;
 before(async () => {
   process.env.PORT = String(18000 + Math.floor(Math.random() * 1000));
   process.env.BACKEND = "zen";
+  // runtime file tro sang file tam: switch trong test khong ban vao repo
+  process.env.RUNTIME_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "zen-rt-")), "runtime.json");
+  const cfg = await import("../src/config.js");
+  cfg.loadRuntime();
   mod = await import("../src/server.js");
   const srv = mod.start();
   await new Promise((r) => setTimeout(r, 300));
-  const { PORT } = await import("../src/config.js");
+  const { PORT } = cfg;
   base = `http://127.0.0.1:${PORT}`;
   globalThis.__srv = srv;
 });
@@ -115,5 +122,14 @@ describe("admin", () => {
         body: JSON.stringify({ backend: "zen", zenModel: "big-pickle", clientPatched: true }),
       });
     }
+  });
+  it("switch luu runtime ra file (tat/bat lai giu info cu)", async () => {
+    await fetch(base + "/admin/switch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend: "zen", zenModel: "big-pickle", clientPatched: true }),
+    });
+    const saved = JSON.parse(fs.readFileSync(process.env.RUNTIME_FILE, "utf8"));
+    assert.equal(saved.backend, "zen");
+    assert.equal(saved.zenModel, "big-pickle");
   });
 });
