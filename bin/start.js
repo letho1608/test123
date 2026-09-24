@@ -330,9 +330,11 @@ async function main() {
   };
   saveSettings(cfg);
   console.log(`da patch ${CLAUDE_SETTINGS} (modelOverrides.${ALIAS} -> ${target} + env ANTHROPIC_*)`);
+  // Linux: hoi cai systemd service chay nen luon khoi giu terminal.
+  // PHAI hoi truoc khi rl.close() (ask() thay readline dong la tra rong ngay).
+  const installed = !IS_WIN && (await setupSystemd({ BACKEND: "zen", ZEN_MODEL: target }));
   rl.close();
-  // Linux: hoi cai systemd service chay nen luon khoi giu terminal
-  if (!IS_WIN && (await setupSystemd({ BACKEND: "zen", ZEN_MODEL: target }))) return;
+  if (installed) return;
   // preflight: port da co proxy chay san thi dung lai, khoi spawn chong
   try {
     const r = await fetch(`http://127.0.0.1:${PORT}/v1/models`);
