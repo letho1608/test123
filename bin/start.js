@@ -9,9 +9,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { claudeSettingsPath, loadSettings, saveSettings } from "./scripts/lib/settings.js";
+import { claudeSettingsPath, loadSettings, saveSettings } from "../scripts/lib/settings.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.dirname(HERE); // repo root (file nay nam trong bin/)
 const PORT = Number(process.env.PORT || 8898);
 const IS_WIN = process.platform === "win32";
 const CLAUDE_SETTINGS = claudeSettingsPath();
@@ -94,11 +95,11 @@ function ensureLocalhostBypass() {
 async function autoUpdate() {
   const git = (args, timeout = 20000) => {
     try {
-      return spawnSync("git", args, { cwd: HERE, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout });
+      return spawnSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout });
     } catch { return null; }
   };
   try {
-    if (!fs.existsSync(path.join(HERE, ".git"))) return;
+    if (!fs.existsSync(path.join(ROOT, ".git"))) return;
     const dirty = git(["status", "--porcelain"]);
     const dirtyFiles = ((dirty && dirty.stdout) || "").trim();
     if (dirtyFiles) {
@@ -133,28 +134,30 @@ async function setupSystemd(envExtra) {
   fs.mkdirSync(sysd, { recursive: true });
   const envLines = Object.entries({ PORT: String(PORT), ...envExtra })
     .map(([k, v]) => `Environment=${k}=${v}`).join("\n");
-  const svc = `[Unit]\nDescription=zen-backend plugin (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
-    + `[Service]\nType=simple\nWorkingDirectory=${HERE}\n`
-    + `ExecStartPre=-/usr/bin/git -C ${HERE} pull --ff-only --quiet\n`
-    + `ExecStart=${process.execPath} ${path.join(HERE, "plugin.mjs")}\n${envLines}\n`
+  const svc = `[Unit]\nDescription=zen-proxy (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
+    + `[Service]\nType=simple\nWorkingDirectory=${ROOT}\n`
+    + `ExecStartPre=-/usr/bin/git -C ${ROOT} pull --ff-only --quiet\n`
+    + `ExecStart=${process.execPath} ${path.join(ROOT, "proxy.mjs")}\n${envLines}\n`
     + `Restart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=default.target\n`;
-  fs.writeFileSync(path.join(sysd, "zen-backend.service"), svc);
+  // Tat service ten cu neu con, tranh 2 instance giu cung port.
+  run(["disable", "--now", "zen-backend"]);
+  fs.writeFileSync(path.join(sysd, "zen-proxy.service"), svc);
   for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {
-    try { fs.copyFileSync(path.join(HERE, "deploy", f), path.join(sysd, f)); } catch {}
+    try { fs.copyFileSync(path.join(ROOT, "deploy", f), path.join(sysd, f)); } catch {}
   }
   const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   run(["daemon-reload"]);
-  const en = run(["enable", "--now", "zen-backend"]);
+  const en = run(["enable", "--now", "zen-proxy"]);
   if (en.status !== 0) {
     console.error("enable service that bai:", (en.stderr || "").slice(0, 300));
-    console.log("lam tay theo INSTALL-UBUNTU.txt muc 7.");
+    console.log("lam tay theo docs/INSTALL-UBUNTU.txt muc 7.");
     return false;
   }
   run(["enable", "--now", "zen-claude-healthcheck.timer"]);
-  const st = run(["is-active", "zen-backend"]);
-  console.log(`\nservice zen-backend: ${(st.stdout || "").trim() || "unknown"}`);
-  console.log(`xem log: journalctl --user -u zen-backend -f`);
-  console.log(`tat: systemctl --user stop zen-backend`);
+  const st = run(["is-active", "zen-proxy"]);
+  console.log(`\nservice zen-proxy: ${(st.stdout || "").trim() || "unknown"}`);
+  console.log(`xem log: journalctl --user -u zen-proxy -f`);
+  console.log(`tat: systemctl --user stop zen-proxy`);
   return true;
 }
 
@@ -176,7 +179,7 @@ const DEFAULT_ZEN = catalogZen().def;
 function verifiedSet() {
   for (const f of ["verified.local.json", "verified.json"]) {
     try {
-      const s = JSON.parse(fs.readFileSync(path.join(HERE, f), "utf8"));
+      const s = JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
       const ok = Object.entries(s.results || {}).filter(([, r]) => r && r.ok).map(([m]) => m);
       if (ok.length) return { set: ok, at: s.updated, from: f };
     } catch {}
@@ -186,7 +189,7 @@ function verifiedSet() {
 // Danh sach model mac dinh doc tu models.json (1 nguon duy nhat cho ca repo).
 function catalogZen() {
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(HERE, "models.json"), "utf8"));
+    const j = JSON.parse(fs.readFileSync(path.join(ROOT, "models.json"), "utf8"));
     if (j?.zen?.verified?.length) {
       return { verified: j.zen.verified, def: j.zen.default || j.zen.verified[0] };
     }
@@ -229,10 +232,10 @@ async function waitReady(port, ms = 15000) {
 async function main() {
   await autoUpdate();
   ensureLocalhostBypass();
-  console.log("== chon backend cho plugin zen-backend ==");
-  console.log("1. Ollama TRUC TIEP (khong qua plugin) - can ollama + model da pull");
-  console.log("2. OpenCode Zen free tier (qua plugin, localhost)");
-  console.log("3. OpenAI-compatible custom (Pollinations keyless / Groq / Cerebras / NVIDIA...)");
+  console.log("== chon backend cho proxy zen-proxy ==");
+  console.log("1. Ollama TRUC TIEP (khong qua proxy) - can ollama + model da pull");
+  console.log("2. OpenCode Zen free tier (qua proxy, localhost)");
+  console.log("3. OpenAI-compatible custom (tu nhap URL/key/model: Groq / Cerebras / NVIDIA...)");
   console.log("4. Exit");
   const pick = await ask("chon [1/2/3/4]: ");
   if (pick === "4") { rl.close(); return; }
@@ -272,10 +275,11 @@ async function main() {
 
   if (pick !== "2" && pick !== "3") { rl.close(); return; }
   if (pick === "3") {
-    // OpenAI-compatible custom: Pollinations mac dinh (keyless), hoac bat ky endpoint nao.
-    const url = (await ask("chat-completions URL [https://text.pollinations.ai/openai]: ")) || "https://text.pollinations.ai/openai";
-    const key = await ask("API key (bo trong neu khong can, vd Pollinations): ");
-    const model = (await ask("model [openai]: ")) || "openai";
+    // OpenAI-compatible custom: bat buoc nhap URL + model (khong mac dinh).
+    const url = (await ask("chat-completions URL (vd https://api.groq.com/openai/v1/chat/completions): ")).trim();
+    const key = await ask("API key: ");
+    const model = (await ask("model: ")).trim();
+    if (!url || !model) { console.error("thieu URL hoac model, huy."); rl.close(); process.exitCode = 1; return; }
     const cfg = loadSettings();
     cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
     delete cfg.modelOverrides[ALIAS];
@@ -286,14 +290,14 @@ async function main() {
       ANTHROPIC_MODEL: ALIAS,
     };
     saveSettings(cfg);
-    console.log(`da patch ${CLAUDE_SETTINGS} (di qua plugin -> ${url})`);
+    console.log(`da patch ${CLAUDE_SETTINGS} (di qua proxy -> ${url})`);
     rl.close();
     const env = { ...process.env, PORT: String(PORT), BACKEND: "openai", OPENAI_URL: url, OPENAI_MODEL: model };
     if (key) env.OPENAI_KEY = key;
     console.log(`\nbackend=openai model=${model}\nMo terminal khac chay claude (settings.json da co san env).\n`);
-    const p = spawn(process.execPath, [path.join(HERE, "plugin.mjs")], { env, stdio: "inherit" });
-    if (await waitReady(PORT)) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
-    else console.log(`\nCANH BAO: plugin chua nghe sau 15s. Kiem tra log o tren.`);
+    const p = spawn(process.execPath, [path.join(ROOT, "proxy.mjs")], { env, stdio: "inherit" });
+    if (await waitReady(PORT)) console.log(`\nproxy READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+    else console.log(`\nCANH BAO: proxy chua nghe sau 15s. Kiem tra log o tren.`);
     p.on("exit", (c) => process.exit(c ?? 0));
     return;
   }
@@ -329,22 +333,22 @@ async function main() {
   rl.close();
   // Linux: hoi cai systemd service chay nen luon khoi giu terminal
   if (!IS_WIN && (await setupSystemd({ BACKEND: "zen", ZEN_MODEL: target }))) return;
-  // preflight: port da co plugin chay san thi dung lai, khoi spawn chong
+  // preflight: port da co proxy chay san thi dung lai, khoi spawn chong
   try {
     const r = await fetch(`http://127.0.0.1:${PORT}/v1/models`);
     const j = await r.json();
     if (r.ok && j && j.object === "list") {
-      console.log(`\nplugin da chay san o port ${PORT} -> dung lai, khoi start moi.`);
+      console.log(`\nproxy da chay san o port ${PORT} -> dung lai, khoi start moi.`);
       console.log(`Mo terminal khac chay claude (settings.json da co san env).`);
       return;
     }
   } catch {}
   const env = { ...process.env, PORT: String(PORT), BACKEND: "zen", ZEN_MODEL: target };
   console.log(`\nbackend=zen model=${target}\nneu muon go tay thay vi dung settings:\n  ` + claudeEnvLines(`http://127.0.0.1:${PORT}`, ALIAS).join("\n  ") + "\n");
-  const p = spawn(process.execPath, [path.join(HERE, "plugin.mjs")], { env, stdio: "inherit" });
-  // doi plugin ready roi moi bao user chay claude (tranh Connection refused do start chua xong)
-  if (await waitReady(PORT)) console.log(`\nplugin READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
-  else console.log(`\nCANH BAO: plugin chua nghe sau 15s (port ${PORT} bi chiem? loi start?). Kiem tra log o tren.`);
+  const p = spawn(process.execPath, [path.join(ROOT, "proxy.mjs")], { env, stdio: "inherit" });
+  // doi proxy ready roi moi bao user chay claude (tranh Connection refused do start chua xong)
+  if (await waitReady(PORT)) console.log(`\nproxy READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+  else console.log(`\nCANH BAO: proxy chua nghe sau 15s (port ${PORT} bi chiem? loi start?). Kiem tra log o tren.`);
   p.on("exit", (c) => process.exit(c ?? 0));
 }
 main();

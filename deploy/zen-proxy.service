@@ -1,5 +1,5 @@
 [Unit]
-Description=zen-backend plugin (Claude Code backend: Zen free tier / Ollama)
+Description=zen-proxy (Claude Code backend: Zen free tier / Ollama)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=%h/zen-claude-proxy
 ExecStartPre=-/usr/bin/git -C %h/zen-claude-proxy pull --ff-only --quiet
-ExecStart=/usr/bin/node %h/zen-claude-proxy/plugin.mjs
+ExecStart=/usr/bin/node %h/zen-claude-proxy/proxy.mjs
 Environment=BACKEND=zen
 Environment=PORT=8898
 # Backend Ollama thi doi 2 dong tren thanh:

@@ -7,8 +7,10 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node start.js",
-    "plugin": "node plugin.mjs",
+    "start": "node bin/start.js",
+    "proxy": "node proxy.mjs",
+    "switch": "node bin/switch.js",
+    "status": "node bin/switch.js status",
     "test": "node --test \"test/*.test.js\""
   },
   "license": "MIT"

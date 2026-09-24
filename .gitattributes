@@ -8,3 +8,5 @@
 *.service text eol=lf
 *.timer text eol=lf
 *.sh text eol=lf
+status text eol=lf
+status.cmd text eol=crlf

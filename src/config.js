@@ -55,12 +55,12 @@ export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-fr
 export const OLLAMA_BASE = str("OLLAMA_BASE", "http://127.0.0.1:11434/v1").replace(/\/+$/, "");
 export const OLLAMA_MODEL = str("OLLAMA_MODEL", "");
 
-// --- openai-compatible generic (Pollinations keyless + Groq/Cerebras/NVIDIA/OpenRouter/HF... co key) ---
-// OPENAI_URL la FULL chat-completions URL (vd https://text.pollinations.ai/openai
-// hoac https://api.groq.com/openai/v1/chat/completions).
-export const OPENAI_URL = str("OPENAI_URL", "https://text.pollinations.ai/openai");
+// --- openai-compatible generic (Groq/Cerebras/NVIDIA/OpenRouter/HF... tu nhap) ---
+// OPENAI_URL la FULL chat-completions URL (vd https://api.groq.com/openai/v1/chat/completions).
+// Khong co mac dinh: phai nhap URL + model (web dashboard, switch.js, hoac start.js muc 3).
+export const OPENAI_URL = str("OPENAI_URL", "");
 export const OPENAI_KEY = str("OPENAI_KEY", "");
-export const OPENAI_MODEL = str("OPENAI_MODEL", "openai");
+export const OPENAI_MODEL = str("OPENAI_MODEL", "");
 
 // --- model hien trong /model picker (alias Claude + zen default) ---
 export const MODEL_IDS = [

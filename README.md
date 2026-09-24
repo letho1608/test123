@@ -1,38 +1,47 @@
-# zen-backend plugin (thuộc marketplace zen-claude-tools)
+# zen-proxy
 
-Plugin cho **Claude Code**: dùng model **OpenCode Zen free tier** (8 model đã verify)
+Proxy localhost cho **Claude Code**: dùng model **OpenCode Zen free tier** (8 model đã verify)
 hoặc **Ollama** local ngay trong Claude Code, không cần key.
 
-## Cài plugin (Ubuntu + Windows giống nhau)
+## Cài đặt (Ubuntu + Windows giống nhau)
 
-Trong Claude Code, gõ:
+Chỉ cần clone repo và chạy:
 
-```text
-/plugin marketplace add letho1608/test123
-/plugin install zen-backend@zen-claude-tools
+```bash
+git clone https://github.com/letho1608/test123.git zen-claude-proxy
+cd zen-claude-proxy
+npm start
 ```
-
-Không mạng ra GitHub thì dùng thư mục local (sau khi `git clone` repo này),
-mở Claude Code tại thư mục cha của repo rồi gõ:
-
-```text
-/plugin marketplace add ./zen-claude-proxy
-/plugin install zen-backend@zen-claude-tools
-```
-
-Xong gọi skill `/zen-backend:zen-models` khi cần đổi model free / hết quota.
 
 ## Đổi backend/model lúc đang chạy (không restart)
 
+Gõ `status` là mở web dashboard (hiện trạng thái + 3 mục chọn model, bấm là đổi).
+Cài 1 lần để gõ được từ mọi thư mục:
+
 ```bash
-node switch.js status              # xem đang dùng gì
-node switch.js zen [model-zen]     # vd: node switch.js zen big-pickle
-node switch.js ollama <model> [alias]
+# Windows (cmd, chạy 1 lần) — thay bằng đường dẫn repo của bạn:
+setx PATH "%PATH%;D:\Code\zen-claude-proxy\bin"
+# (mở cmd mới rồi gõ: status)
+
+# Ubuntu (chạy 1 lần):
+ln -sf ~/zen-claude-proxy/bin/status ~/.local/bin/status
+# (đảm bảo ~/.local/bin có trong PATH rồi gõ: status)
 ```
 
-`switch.js` vừa patch `settings.json` vừa gọi `POST /admin/switch` cho plugin
-đang chạy (có API `GET /admin/status` để xem). Trong Claude Code thì gọi
-command `/zen-backend:switch` với tham số tương tự.
+Chưa cài thì đứng trong thư mục `bin` gõ `status` (Windows) hoặc `./status` (Ubuntu).
+Mở tay cũng được: `http://127.0.0.1:8898/` (đúng port proxy đang chạy).
+
+- **1. Ollama local:** tick 1 trong số model `ollama list`, nhập alias, bấm dùng
+- **2. Zen free tier:** bấm dùng 1 trong các model verified
+- **3. OpenAI-compatible:** nhập URL/key/model rồi bấm dùng
+
+Dùng lệnh cũng được (tự patch `settings.json` + gọi `POST /admin/switch`):
+
+```bash
+npm run switch -- zen [model-zen]     # vd: npm run switch -- zen big-pickle
+npm run switch -- ollama <model> [alias]
+npm run switch -- openai <url> [key] <model>
+```
 
 ## Yêu cầu
 
@@ -43,30 +52,30 @@ command `/zen-backend:switch` với tham số tương tự.
 ## Chạy
 
 ```bash
-node start.js        # hoặc: npm start
+npm start
 ```
 
-Chi tiết từng lệnh cài trên Ubuntu xem file `INSTALL-UBUNTU.txt`.
+Chi tiết từng lệnh cài trên Ubuntu xem file `docs/INSTALL-UBUNTU.txt`.
 
 Menu:
 
 ```text
 1. Ollama (model đã cài trên máy)
 2. OpenCode Zen free tier (muse-spark-1.3-contributor-free, không cần key)
-3. Exit
+3. OpenAI-compatible custom (tự nhập URL/key/model)
+4. Exit
 ```
 
 Chọn `1` → liệt kê `ollama list` để pick model, rồi tự `ollama cp` sang tên
 dạng `claude-*` (Claude Code chỉ gửi đi tên model bắt đầu bằng `claude-`,
-còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không qua plugin.**
+còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không qua proxy.**
 Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
 nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`.
-Chọn `3` → OpenAI-compatible custom: mặc định là **Pollinations (keyless)**,
-hoặc nhập URL/key/model bất kỳ (Groq, Cerebras, NVIDIA NIM, OpenRouter `:free`,
-HuggingFace router...). Đi qua plugin để dịch protocol.
+Chọn `3` → OpenAI-compatible custom: tự nhập URL/key/model
+(Groq, Cerebras, NVIDIA NIM, OpenRouter, HuggingFace router...). Đi qua proxy để dịch protocol.
 Trên Linux còn hỏi thêm có cài systemd service chạy nền luôn không (khỏi giữ terminal).
 
-`start.js` sẽ:
+`npm start` sẽ:
 
 1. Tự patch config Claude (`~/.claude/settings.json`, Windows: `%USERPROFILE%\.claude\settings.json`):
    merge `modelOverrides: { "claude-sonnet-4-5": "<model-tương-ứng>" }` (giữ nguyên các key khác,
@@ -97,7 +106,12 @@ proxy tự route sang model backend đã chọn.
 ## Cấu trúc code
 
 ```text
-plugin.mjs           entry point mỏng (gọi src/server.js)
+proxy.mjs            entry point mỏng (gọi src/server.js)
+bin/
+  start.js           menu chọn backend + cài systemd service
+  switch.js          đổi backend/model lúc đang chạy (npm run switch -- ...)
+  status(.cmd)       gõ "status" là mở web dashboard (Win/Linux)
+  uninstall.sh       gỡ service + Claude + config (bash bin/uninstall.sh)
 src/
   config.js          mọi cấu hình + validate env, hằng số, load assets
   logger.js          log theo level (debug/info/warn/error)
@@ -111,11 +125,12 @@ src/
   backends/
     zen.js           Zen free tier (fingerprint, retry, failover, route /responses|/chat)
     ollama.js        Ollama OpenAI-compat
-  server.js          routes, validation, graceful shutdown, /diag
+    openai.js        OpenAI-compat tự nhập URL/key/model
+  server.js          routes, validation, graceful shutdown, /diag, web dashboard /
 assets/              prompt/tools mẫu cho free-tier gate (agentdev.txt, decoy_tools.json, fp.json)
-deploy/              systemd units (zen-backend.service, healthcheck.*)
+deploy/              systemd units (zen-proxy.service, healthcheck.*)
+docs/                hướng dẫn cài Ubuntu (INSTALL-UBUNTU.txt)
 scripts/             healthcheck.mjs, test-e2e.js (kiểm định tool-loop thật)
-plugins/zen-backend  plugin Claude (marketplace + skill zen-models)
 test/                unit test offline (`npm test`, vài giây)
 models.json          danh sách model free + route endpoint (1 nguồn duy nhất)
 verified.json        kết quả test-e2e (menu đọc để gắn tag)
@@ -123,18 +138,18 @@ verified.json        kết quả test-e2e (menu đọc để gắn tag)
 
 ## Kiểm định model (verified không còn hardcode)
 
-`node scripts/test-e2e.js [model-id | all]` — với mỗi model, script tự start plugin,
+`node scripts/test-e2e.js [model-id | all]` — với mỗi model, script tự start proxy,
 chạy Claude Code thật làm 1 task bắt buộc dùng tool (tạo file đúng nội dung),
-rồi ghi kết quả vào `verified.json`. Menu `start.js` đọc file này để gắn tag.
+rồi ghi kết quả vào `verified.json`. Menu đọc file này để gắn tag.
 
 - Test 1 con lẻ mất ~2-5 phút; quét full 8 con mất ~20-30 phút.
 - Lần quét gần nhất (trong `verified.json`): cả 8 model free đều PASS tool loop.
   Lưu ý: quét dồn dập có thể ăn `429 FreeUsageLimitError` (rate limit phía Zen) —
   đợi vài phút chạy lại con đó là pass.
 
-## Plugin backend Zen hoạt động thế nào
+## Proxy backend Zen hoạt động thế nào
 
-Free tier Zen không check API key mà check "độ giống opencode". Plugin backend tự route
+Free tier Zen không check API key mà check "độ giống opencode". Proxy tự route
 mỗi model đúng endpoint của nó:
 
 - `muse-spark-1.3/1.2-contributor-free` → `/responses` (prompt agent + 6 tools mồi)
@@ -156,15 +171,15 @@ Backend và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows 
 
 ## Lỗi thường gặp
 
-**`API Error: Connection refused` trong Claude Code** = Claude không nối được tới plugin backend.
+**`API Error: Connection refused` trong Claude Code** = Claude không nối được tới proxy backend.
 99% là do backend **chưa chạy** (mỗi terminal mới phải start trước), hoặc lệch port:
 
 1. Kiểm tra backend có nghe không:
    - Windows (PowerShell): `curl.exe -s http://127.0.0.1:8898/`
    - Ubuntu: `curl -s http://127.0.0.1:8898/`
-   - Phải thấy trang `zen-backend plugin dang chay`. Nếu `Connection refused` → chạy `node start.js` (chọn 2) trước rồi mới mở Claude.
+   - Phải thấy web dashboard `zen-proxy`. Nếu `Connection refused` → chạy `npm start` (chọn 2) trước rồi mới mở Claude.
 2. Kiểm tra đường ra mạng của máy: mở `http://127.0.0.1:8898/diag` trên browser —
    xem `zen_models.ok` có `true` không. Nếu `false`, đọc `error` trong đó (DNS/timeout/...)
    rồi gửi output cho người debug.
-3. Đổi port thì đổi cả 2 chỗ: `PORT=9000 node start.js` + `ANTHROPIC_BASE_URL`
-   trong settings.json (hoặc chạy lại `start.js`, nó patch lại).
+3. Đổi port thì đổi cả 2 chỗ: `PORT=9000 npm start` + `ANTHROPIC_BASE_URL`
+   trong settings.json (hoặc chạy lại `npm start`, nó patch lại).

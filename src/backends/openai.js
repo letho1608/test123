@@ -1,5 +1,5 @@
-// backends/openai.js — bat ky endpoint OpenAI Chat Completions nao
-// (Ollama /v1/chat/completions, Pollinations /openai, Groq, Cerebras, NVIDIA...).
+// backends/openai.js — bat ky endpoint OpenAI Chat Completions nao tu nhap
+// (Groq, Cerebras, NVIDIA, OpenRouter, HuggingFace router...).
 // Dung chung 1 translator, khac nhau chi base URL + key + model.
 import { ApiError } from "../errors.js";
 import { toOpenAiMessages, toOpenAiTools, openAiTurnToAnthropic, mapToolChoice } from "../translators/openai.js";

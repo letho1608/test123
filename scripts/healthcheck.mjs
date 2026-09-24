@@ -8,7 +8,9 @@ import os from "node:os";
 import path from "node:path";
 
 const PORT = Number(process.env.PORT || process.argv[2] || 8898);
-const SERVICE = process.env.SERVICE || "zen-backend";
+const SERVICE = process.env.SERVICE || "zen-proxy";
+// Ten service cu van duoc thu fallback cho may chua cai lai service.
+const LEGACY_SERVICE = "zen-backend";
 const STATE_FILE = path.join(os.tmpdir(), "zen-health-fails.json");
 
 function loadFails() {
@@ -38,10 +40,16 @@ async function main() {
   saveFails(fails);
   console.log(`FAIL lan ${fails}: ${err || JSON.stringify(diag?.checks || {}).slice(0, 300)}`);
   if (fails >= 2) {
-    console.log(`restart ${SERVICE} ...`);
-    const r = spawnSync("systemctl", ["--user", "restart", SERVICE], { encoding: "utf8" });
-    if (r.error) console.log("khong goi duoc systemctl (khong phai linux/systemd?):", String(r.error).slice(0, 150));
-    else console.log("restart exit:", r.status);
+    for (const svc of [SERVICE, LEGACY_SERVICE]) {
+      console.log(`restart ${svc} ...`);
+      const r = spawnSync("systemctl", ["--user", "restart", svc], { encoding: "utf8" });
+      if (r.error) {
+        console.log("khong goi duoc systemctl (khong phai linux/systemd?):", String(r.error).slice(0, 150));
+        break;
+      }
+      console.log(`restart ${svc} exit:`, r.status);
+      if (r.status === 0) break;
+    }
     saveFails(0);
   }
   process.exitCode = 1;

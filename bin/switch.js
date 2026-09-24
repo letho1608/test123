@@ -1,10 +1,12 @@
 // switch.js — doi backend/model luc DANG CHAY, khong can restart proxy.
-//   node switch.js status
-//   node switch.js zen [model-zen]        (vd: node switch.js zen big-pickle)
-//   node switch.js ollama <model-ollama> [alias-claude]
+//   npm run switch -- status     (in trang thai + tu mo web dashboard chon model)
+//   npm run switch -- zen [model-zen]        (vd: npm run switch -- zen big-pickle)
+//   npm run switch -- ollama <model-ollama> [alias-claude]
+//   npm run switch -- openai <url> [key] <model>
+// Web dashboard cung lam duoc het: mo http://127.0.0.1:8898/ (xem port thuc te o duoi).
 // Hai viec: (1) patch settings.json cua Claude, (2) POST /admin/switch cho proxy dang chay.
-import { spawnSync } from "node:child_process";
-import { claudeSettingsPath, loadSettings, saveSettings } from "./scripts/lib/settings.js";
+import { spawnSync, exec } from "node:child_process";
+import { claudeSettingsPath, loadSettings, saveSettings } from "../scripts/lib/settings.js";
 
 const PORT = Number(process.env.PORT || 8898);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -27,9 +29,15 @@ async function cmdStatus() {
     const s = await get("/admin/status");
     console.log(JSON.stringify(s.json, null, 2));
   } catch (e) {
-    console.error("proxy khong chay o port", PORT, "(mo bang node start.js truoc)");
+    console.error("proxy khong chay o port", PORT, "(mo bang npm start truoc)");
     process.exitCode = 1;
+    return;
   }
+  console.log(`dashboard chon model: ${BASE}/`);
+  const url = `${BASE}/`;
+  const cmd = process.platform === "win32" ? `start "" "${url}"`
+    : process.platform === "darwin" ? `open "${url}"` : `xdg-open "${url}"`;
+  exec(cmd, () => {});
 }
 
 async function cmdZen(model) {
@@ -44,17 +52,17 @@ async function cmdZen(model) {
   const p = saveSettings(cfg);
   console.log(`da patch ${p} -> zen/${model}`);
   try {
-    const s = await post("/admin/switch", { backend: "zen", zenModel: model });
+    const s = await post("/admin/switch", { backend: "zen", zenModel: model, clientPatched: true });
     console.log("proxy:", JSON.stringify(s.json));
   } catch {
-    console.log("proxy chua chay (mo bang node start.js chon 2) - settings da luu, mo proxy la dung ngay.");
+    console.log("proxy chua chay (mo bang npm start, chon 2) - settings da luu, mo proxy la dung ngay.");
   }
 }
 
 async function cmdOllama(model, alias) {
   alias = alias || "claude-sonnet-4-6";
   if (!model) {
-    console.error("thieu ten model: node switch.js ollama <model-ollama> [alias]");
+    console.error("thieu ten model: npm run switch -- ollama <model-ollama> [alias]");
     process.exitCode = 1;
     return;
   }
@@ -77,11 +85,20 @@ async function cmdOllama(model, alias) {
   };
   const p = saveSettings(cfg);
   console.log(`da patch ${p} -> ollama truc tiep ${model} (alias ${alias}), khong can proxy.`);
+  try {
+    const s = await post("/admin/switch", { backend: "ollama", ollamaModel: model, alias, clientPatched: true });
+    console.log("proxy:", JSON.stringify(s.json));
+  } catch {
+    console.log("proxy chua chay - settings da luu, mo proxy la dung ngay.");
+  }
 }
 
 async function cmdOpenAi(url, key, model) {
-  url = url || "https://text.pollinations.ai/openai";
-  model = model || "openai";
+  if (!url || !model) {
+    console.error("thieu URL/model: npm run switch -- openai <chat-completions-URL> [key] <model>");
+    process.exitCode = 1;
+    return;
+  }
   const cfg = loadSettings();
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
   delete cfg.modelOverrides[ALIAS];
@@ -94,10 +111,10 @@ async function cmdOpenAi(url, key, model) {
   const p = saveSettings(cfg);
   console.log(`da patch ${p} -> openai-compatible ${model} @ ${url}`);
   try {
-    const s = await post("/admin/switch", { backend: "openai", openaiUrl: url, openaiKey: key || "", openaiModel: model });
-    console.log("plugin:", JSON.stringify(s.json));
+    const s = await post("/admin/switch", { backend: "openai", openaiUrl: url, openaiKey: key || "", openaiModel: model, clientPatched: true });
+    console.log("proxy:", JSON.stringify(s.json));
   } catch {
-    console.log("plugin chua chay (mo bang node start.js chon 3) - settings da luu, mo plugin la dung ngay.");
+    console.log("proxy chua chay (mo bang npm start, chon 3) - settings da luu, mo proxy la dung ngay.");
   }
 }
 
@@ -108,11 +125,11 @@ async function main() {
   if (cmd === "ollama") return cmdOllama(a, b);
   if (cmd === "openai") return cmdOpenAi(a, b, c);
   console.log([
-    "dung: node switch.js <lenh>",
-    "  status                       xem backend/model plugin dang dung",
-    "  zen [model-zen]              doi sang Zen (can plugin dang chay; tu patch settings)",
+    "dung: npm run switch -- <lenh>   (lenh status tu mo web dashboard)",
+    "  status                       xem backend/model proxy dang dung + mo web",
+    "  zen [model-zen]              doi sang Zen (can proxy dang chay; tu patch settings)",
     "  ollama <model> [alias]       doi sang Ollama truc tiep (ollama cp + patch settings)",
-    "  openai [url] [key] [model]   doi sang OpenAI-compat (mac dinh Pollinations keyless)",
+    "  openai <url> [key] <model>   doi sang OpenAI-compat tu nhap (bat buoc URL + model)",
   ].join("\n"));
 }
 main();

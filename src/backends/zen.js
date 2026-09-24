@@ -4,7 +4,7 @@
 // (prompt agent + tools opencode; model responses di /responses, con lai di /chat).
 import { ZEN_BASE, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED, runtime } from "../config.js";
 import { logger } from "../logger.js";
-import { ApiError } from "../errors.js";
+import { ApiError, Codes } from "../errors.js";
 import { mintSes, mintMsg } from "../ids.js";
 import { textOf, toToolUseBlock } from "../translators/anthropic.js";
 import { toResponsesInput, toResponsesTools, responsesToAnthropic } from "../translators/responses.js";
@@ -123,6 +123,8 @@ async function streamResponses(up, down, model) {
 export async function handleZen(body, model, assets, res, log) {
   // Failover: thu model dang chon truoc, hong thi sang model verified tiep theo.
   // Tra ve model THAT da dung (Claude chap nhan mismatch, da verify).
+  // CHI failover loi retryable (mang/429/het quota/gate); loi 4xx khac doi model
+  // cung hong nhu nhau -> nem ngay, tranh storm 8 request vo ich.
   // Doc runtime moi request de doi model luc dang chay (POST /admin/switch).
   const candidates = [runtime.zenModel, ...ZEN_VERIFIED.filter((m) => m !== runtime.zenModel)];
   let lastErr = null;
@@ -136,10 +138,18 @@ export async function handleZen(body, model, assets, res, log) {
       return finishZenStream(up, body, candidate, useResponses, res);
     } catch (e) {
       lastErr = e;
+      if (!isRetryableZen(e)) throw e;
       log(`zen ${candidate} hong (${e.code || "error"}), failover sang model tiep theo`);
     }
   }
   throw lastErr || ApiError.internal("het model thu");
+}
+
+// Loi co the het bang doi model: mat mang, 429, model bi tu choi (401/403), gate, 5xx.
+export function isRetryableZen(e) {
+  if (!(e instanceof ApiError)) return false;
+  if (e.code === Codes.UPSTREAM_UNREACHABLE || e.code === Codes.FREETIER_DENIED) return true;
+  return e.status === 401 || e.status === 403 || e.status === 429 || e.status >= 500;
 }
 
 // 1 candidate: gui 1 lan (+1 retry neu FreeTierError), loi mang nem ra ngoai.

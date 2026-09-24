@@ -22,9 +22,9 @@ describe("config", () => {
   it("hang so ID la so", () => {
     assert.ok(Number.isFinite(T_SES) && Number.isFinite(M_MSG));
   });
-  it("openai mac dinh la Pollinations keyless", () => {
-    assert.ok(OPENAI_URL.includes("pollinations.ai"));
-    assert.ok(OPENAI_MODEL.length > 0);
+  it("openai khong mac dinh (bat buoc nhap tay)", () => {
+    assert.equal(OPENAI_URL, "");
+    assert.equal(OPENAI_MODEL, "");
   });
   it("loadAssets doc du lieu that", () => {
     const a = loadAssets();
