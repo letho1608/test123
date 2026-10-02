@@ -4,7 +4,15 @@ import { textOf } from "./anthropic.js";
 
 export function toResponsesInput(system, messages, fingerprint) {
   const sysText = textOf(system);
-  const dev = sysText ? fingerprint + "\n\n" + sysText : fingerprint;
+  const sysExtras = [];
+  for (const m of messages || []) {
+    // Claude ban moi gui system prompt dang message role=system -> gop vao developer
+    if (m && m.role === "system") {
+      const t = typeof m.content === "string" ? m.content : textOf(m.content);
+      if (t) sysExtras.push(t);
+    }
+  }
+  const dev = [fingerprint, sysText, ...sysExtras].filter(Boolean).join("\n\n");
   const input = [{ role: "developer", content: dev }];
   for (const m of messages || []) {
     if (m.role === "user") {

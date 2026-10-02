@@ -6,4 +6,5 @@ harvest/
 *.log
 verified.local.json
 runtime.local.json
+providers.json
 ANALYSIS.md

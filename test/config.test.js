@@ -17,7 +17,7 @@ describe("config", () => {
   });
   it("MODEL_IDS chua zen + alias claude", () => {
     assert.ok(MODEL_IDS.includes(ZEN_MODEL));
-    assert.ok(MODEL_IDS.includes("claude-sonnet-4-5"));
+    assert.ok(MODEL_IDS.includes("claude-sonnet-5-5"));
   });
   it("hang so ID la so", () => {
     assert.ok(Number.isFinite(T_SES) && Number.isFinite(M_MSG));

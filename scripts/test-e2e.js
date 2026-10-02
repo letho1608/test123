@@ -1,24 +1,27 @@
 // test-e2e.js — kiem dinh model that qua Claude Code (tool loop that)
 //   node test-e2e.js [model-id | all]   (mac dinh: muse-spark-1.3-contributor-free)
-// Ket qua luu verified.json de start.js hien tag theo ket qua that (khong hardcode).
-// Moi model mat ~2-5 phut (model free cham). Chay full 8 con thi di uong cafe.
+// Model PASS -> promote vao verified that (models.json + providers.json) de
+// dashboard/failover dung ngay. Chi tiet tung lan chay luu verified.local.json.
+// Moi model mat ~2-5 phut (model free cham). Chay full thi di uong cafe.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { parseJsonText } from "../src/json.js";
+import { promoteVerifiedModel } from "../src/zen-refresh.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ARG = process.argv[2] || "muse-spark-1.3-contributor-free";
 // Ket qua test ghi ra verified.local.json (rieng may, gitignored) de khong lam
 // ban working tree -> git pull luon fast-forward duoc. Menu uu tien file nay.
 const VERIFIED_FILE = path.join(HERE, "..", "verified.local.json");
-const ALIAS = "claude-sonnet-4-5";
+const ALIAS = "claude-sonnet-5-5";
 const PER_MODEL_TIMEOUT = 5 * 60 * 1000;
 
 function loadVerified() {
-  try { return JSON.parse(fs.readFileSync(VERIFIED_FILE, "utf8")); }
+  try { return parseJsonText(fs.readFileSync(VERIFIED_FILE, "utf8")); }
   catch { return { updated: null, results: {} }; }
 }
 function freePort() {
@@ -89,9 +92,10 @@ async function testOne(model, port) {
 async function main() {
   let list;
   if (ARG === "all") {
+    // Quet het free list (chua verify duoc test) — verified cu giu nguyen.
     try {
-      const j = JSON.parse(fs.readFileSync(path.join(HERE, "..", "models.json"), "utf8"));
-      list = j?.zen?.verified?.length ? j.zen.verified : null;
+      const j = parseJsonText(fs.readFileSync(path.join(HERE, "..", "models.json"), "utf8"));
+      list = j?.zen?.free?.length ? j.zen.free : j?.zen?.verified;
     } catch {}
     list = list || [
       "muse-spark-1.3-contributor-free", "muse-spark-1.2-contributor-free",
@@ -107,6 +111,7 @@ async function main() {
     store.results[m] = { ok: r.ok, ms: r.ms, note: r.note, at: new Date().toISOString() };
     store.updated = new Date().toISOString();
     fs.writeFileSync(VERIFIED_FILE, JSON.stringify(store, null, 2));
+    if (r.ok) await promoteVerifiedModel(m);
   }
   console.log("\n=== tong ket ===");
   for (const m of list) {

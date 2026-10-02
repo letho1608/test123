@@ -2,7 +2,11 @@
 // Gate free tier (reverse-engineered): Bearer public + UA opencode + x-opencode-*
 // (ID time-ordered tu mint) + stream:true + tool_choice auto + body dang opencode
 // (prompt agent + tools opencode; model responses di /responses, con lai di /chat).
-import { ZEN_BASE, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED, runtime } from "../config.js";
+import { ZEN_BASE, ZEN_UA, ZEN_TIMEOUT_MS, RESPONSES_MODELS, ZEN_VERIFIED, runtime, ROOT } from "../config.js";
+import { loadProviders } from "../providers/registry.js";
+import { parseJsonText } from "../json.js";
+import fs from "node:fs";
+import path from "node:path";
 import { logger } from "../logger.js";
 import { ApiError, Codes } from "../errors.js";
 import { mintSes, mintMsg } from "../ids.js";
@@ -120,16 +124,36 @@ async function streamResponses(up, down, model) {
   framer.done(stopReason, usage);
 }
 
+// Doc catalog fresh moi request de hot-reload co hieu luc ngay, khong can restart:
+// - verified list: providers.json (refresh-zen / sua tay) -> fallback hang so luc boot
+// - responsesModels: models.json (sua tay) -> fallback hang so luc boot
+export function liveVerified() {
+  try {
+    const m = loadProviders().zen?.config?.models;
+    if (Array.isArray(m) && m.length) return m;
+  } catch {}
+  return ZEN_VERIFIED;
+}
+export function liveResponsesModels() {
+  try {
+    const arr = parseJsonText(fs.readFileSync(path.join(ROOT, "models.json"), "utf8"))?.zen?.responsesModels;
+    if (Array.isArray(arr) && arr.length) return new Set(arr);
+  } catch {}
+  return RESPONSES_MODELS;
+}
+
 export async function handleZen(body, model, assets, res, log) {
   // Failover: thu model dang chon truoc, hong thi sang model verified tiep theo.
   // Tra ve model THAT da dung (Claude chap nhan mismatch, da verify).
   // CHI failover loi retryable (mang/429/het quota/gate); loi 4xx khac doi model
   // cung hong nhu nhau -> nem ngay, tranh storm 8 request vo ich.
-  // Doc runtime moi request de doi model luc dang chay (POST /admin/switch).
-  const candidates = [runtime.zenModel, ...ZEN_VERIFIED.filter((m) => m !== runtime.zenModel)];
+  // Doc runtime + catalog moi request de doi model / refresh-zen luc dang chay.
+  const verified = liveVerified();
+  const responsesModels = liveResponsesModels();
+  const candidates = [runtime.zenModel, ...verified.filter((m) => m !== runtime.zenModel)];
   let lastErr = null;
   for (const candidate of candidates) {
-    const useResponses = RESPONSES_MODELS.has(candidate);
+    const useResponses = responsesModels.has(candidate);
     const path = useResponses ? "/responses" : "/chat/completions";
     const payload = buildZenPayloads(body, assets, candidate)[useResponses ? "responses" : "chat"];
     try {

@@ -16,7 +16,7 @@ const ROOT = path.dirname(HERE); // repo root (file nay nam trong bin/)
 const PORT = Number(process.env.PORT || 8898);
 const IS_WIN = process.platform === "win32";
 const CLAUDE_SETTINGS = claudeSettingsPath();
-const ALIAS = "claude-sonnet-4-6"; // alias doi cao, ollama cp sang ten nay de nhin thay
+const ALIAS = "claude-sonnet-5-5"; // alias doi cao, ollama cp sang ten nay de nhin thay
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 // stdin pipe (khong phai terminal, vd test tu dong): doc het len truoc roi tra loi tuan tu.
@@ -132,6 +132,7 @@ async function setupSystemd(envExtra) {
   if (ans !== "y" && ans !== "yes") return false;
   const sysd = path.join(os.homedir(), ".config", "systemd", "user");
   fs.mkdirSync(sysd, { recursive: true });
+  const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   const envLines = Object.entries({ PORT: String(PORT), ...envExtra })
     .map(([k, v]) => `Environment=${k}=${v}`).join("\n");
   const svc = `[Unit]\nDescription=zen-proxy (Claude Code backend)\nAfter=network-online.target\nWants=network-online.target\n\n`
@@ -145,7 +146,6 @@ async function setupSystemd(envExtra) {
   for (const f of ["zen-claude-healthcheck.service", "zen-claude-healthcheck.timer"]) {
     try { fs.copyFileSync(path.join(ROOT, "deploy", f), path.join(sysd, f)); } catch {}
   }
-  const run = (args) => spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   run(["daemon-reload"]);
   const en = run(["enable", "--now", "zen-proxy"]);
   if (en.status !== 0) {
@@ -251,7 +251,7 @@ async function main() {
     models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
     const n = Number(await ask(`chon model [1-${models.length}] (mac dinh 1): `) || "1");
     const src = models[n - 1] || models[0];
-    const alias = (await ask("alias Claude de dung [claude-sonnet-4-6]: ")) || "claude-sonnet-4-6";
+    const alias = (await ask("alias Claude de dung [claude-sonnet-5-5]: ")) || "claude-sonnet-5-5";
     console.log(`copy ollama: ${src} -> ${alias} ...`);
     const cp = spawnSync("ollama", ["cp", src, alias], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     if (cp.status !== 0) { console.error("ollama cp that bai:", (cp.stderr || "").slice(0, 300)); rl.close(); process.exitCode = 1; return; }

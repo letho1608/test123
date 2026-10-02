@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseJsonText } from "./json.js";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -16,7 +17,7 @@ function num(name, def) {
 }
 
 export const _b = str("BACKEND", "zen").toLowerCase();
-if (!["zen", "ollama", "openai"].includes(_b)) throw new Error(`BACKEND khong hop le: ${_b} (chon zen|ollama|openai)`);
+if (!["zen", "ollama", "openai", "claude"].includes(_b)) throw new Error(`BACKEND khong hop le: ${_b} (chon zen|ollama|openai|claude)`);
 const BACKEND = _b;
 export { BACKEND };
 export const PORT = (() => {
@@ -33,10 +34,17 @@ export const ZEN_BASE = str("ZEN_BASE", "https://opencode.ai/zen/v1").replace(/\
 export const ZEN_MODEL = str("ZEN_MODEL", "muse-spark-1.3-contributor-free");
 export const ZEN_UA = "opencode/1.18.21 ai-sdk/provider-utils/4.0.38 runtime/bun/1.3.14";
 export const ZEN_TIMEOUT_MS = num("ZEN_TIMEOUT_MS", 120000);
+// Tu dong tai lai danh sach model Zen free moi N gio (0 = tat). Chay nen sau
+// khi boot 60s roi lap lai; that bai mang thi bo qua, lan sau thu lai.
+export const ZEN_REFRESH_HOURS = (() => {
+  if (process.env.ZEN_REFRESH_HOURS === undefined || process.env.ZEN_REFRESH_HOURS === "") return 24;
+  const v = Number(process.env.ZEN_REFRESH_HOURS);
+  return Number.isFinite(v) && v >= 0 ? v : 24;
+})();
 // Model zen free di Responses API; cac model free con lai di /chat/completions.
 function loadModelsJson() {
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(ROOT, "models.json"), "utf8"));
+    const j = parseJsonText(fs.readFileSync(path.join(ROOT, "models.json"), "utf8"));
     return j.zen || {};
   } catch { return {}; }
 }
@@ -62,12 +70,20 @@ export const OPENAI_URL = str("OPENAI_URL", "");
 export const OPENAI_KEY = str("OPENAI_KEY", "");
 export const OPENAI_MODEL = str("OPENAI_MODEL", "");
 
+// --- claude goc (bypass proxy, dung API key Anthropic truc tiep) ---
+export const CLAUDE_MODEL = str("CLAUDE_MODEL", "claude-sonnet-5-5");
+
 // --- model hien trong /model picker (alias Claude + zen default) ---
 export const MODEL_IDS = [
   ZEN_MODEL,
+  "claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-4-5", "claude-fable-5-1",
   "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",
   "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-3-5",
 ];
+
+// --- providers registry (load tu providers.json) ---
+import { loadProviders } from "./providers/registry.js";
+export const PROVIDERS = loadProviders();
 
 // Runtime co the doi luc dang chay qua POST /admin/switch (khong can restart).
 // Khoi tao tu env, chi doi qua endpoint admin (localhost-only).
@@ -78,6 +94,7 @@ export const runtime = {
   openaiUrl: OPENAI_URL,
   openaiKey: OPENAI_KEY,
   openaiModel: OPENAI_MODEL,
+  claudeModel: CLAUDE_MODEL,
 };
 
 // Luu/khoi phuc runtime vao file local (rieng may, gitignored) de tat proxy
@@ -90,14 +107,14 @@ function runtimeFile() {
 }
 export function loadRuntime() {
   try {
-    const saved = JSON.parse(fs.readFileSync(runtimeFile(), "utf8"));
+    const saved = parseJsonText(fs.readFileSync(runtimeFile(), "utf8"));
     if (!saved || typeof saved !== "object") return;
     // Env truyen vao luc start (menu start.js / systemd) uu tien hon file cu.
     const hasEnv = (n) => process.env[n] !== undefined && process.env[n] !== "";
-    if (["zen", "ollama", "openai"].includes(saved.backend) && !hasEnv("BACKEND")) {
+    if (["zen", "ollama", "openai", "claude"].includes(saved.backend) && !hasEnv("BACKEND")) {
       runtime.backend = saved.backend;
     }
-    for (const [k, env] of [["zenModel", "ZEN_MODEL"], ["ollamaModel", "OLLAMA_MODEL"], ["openaiUrl", "OPENAI_URL"], ["openaiKey", "OPENAI_KEY"], ["openaiModel", "OPENAI_MODEL"]]) {
+    for (const [k, env] of [["zenModel", "ZEN_MODEL"], ["ollamaModel", "OLLAMA_MODEL"], ["openaiUrl", "OPENAI_URL"], ["openaiKey", "OPENAI_KEY"], ["openaiModel", "OPENAI_MODEL"], ["claudeModel", "CLAUDE_MODEL"]]) {
       if (typeof saved[k] === "string" && saved[k] && !hasEnv(env)) runtime[k] = saved[k];
     }
   } catch { /* chua co file -> dung env/mac dinh */ }

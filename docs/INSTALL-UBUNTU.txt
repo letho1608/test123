@@ -38,9 +38,9 @@ npm start
 #   ln -sf ~/zen-claude-proxy/bin/status ~/.local/bin/status && status
 
 --- 6. Chạy Claude Code (terminal khác, cùng máy) ---
-export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-4-5
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8898 ANTHROPIC_API_KEY=public ANTHROPIC_MODEL=claude-sonnet-5-5
 claude
-# (Tên claude-sonnet-4-5 chỉ là alias để Claude chịu validate — request thực tế
+# (Tên claude-sonnet-5-5 chỉ là alias để Claude chịu validate — request thực tế
 #  proxy tự route sang model đã chọn ở bước 5. start.js cũng đã nhúng
 #  sẵn 3 biến này vào ~/.claude/settings.json nên thường mở `claude` là chạy.)
 

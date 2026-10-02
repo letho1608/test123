@@ -1,0 +1,13 @@
+{
+  "_note": "Copy thanh providers.json de dung (providers.json da gitignore, khong commit key that). Built-in zen/ollama/claude luon co san ke ca khi thieu file nay.",
+  "groq": {
+    "type": "openai",
+    "name": "Groq",
+    "enabled": true,
+    "config": {
+      "url": "https://api.groq.com/openai/v1/chat/completions",
+      "apiKey": "",
+      "models": ["llama-3.3-70b-versatile"]
+    }
+  }
+}

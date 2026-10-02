@@ -38,9 +38,10 @@ export function validateMessagesBody(body) {
   if (body.messages !== undefined && !Array.isArray(body.messages)) {
     throw ApiError.badRequest("messages phai la array");
   }
-  for (const m of body.messages || []) {
-    if (!m || (m.role !== "user" && m.role !== "assistant")) {
-      throw ApiError.badRequest("moi message can role user|assistant");
+  for (let i = 0; i < (body.messages || []).length; i++) {
+    const m = body.messages[i];
+    if (!m || (m.role !== "user" && m.role !== "assistant" && m.role !== "system")) {
+      throw ApiError.badRequest(`message[${i}] can role user|assistant|system (nhan role=${JSON.stringify(m?.role)?.slice(0, 40)})`);
     }
   }
   if (body.tools !== undefined && !Array.isArray(body.tools)) {

@@ -7,6 +7,12 @@ export function toOpenAiMessages(system, messages) {
   const sys = textOf(system);
   if (sys) out.push({ role: "system", content: sys });
   for (const m of messages || []) {
+    // Claude ban moi gui system prompt dang message role=system (thay vi field system rieng)
+    if (m.role === "system") {
+      const t = typeof m.content === "string" ? m.content : textOf(m.content);
+      if (t) out.push({ role: "system", content: t });
+      continue;
+    }
     if (m.role === "user") {
       const blocks = typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content || [];
       const parts = [];

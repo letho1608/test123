@@ -14,6 +14,15 @@ describe("toResponsesInput", () => {
     assert.ok(inp[0].content.startsWith("FINGERPRINT\n\nsys"));
     assert.deepEqual(inp[1], { role: "user", content: [{ type: "input_text", text: "hi" }] });
   });
+  it("message role=system gop vao developer", () => {
+    const inp = toResponsesInput("sys", [
+      { role: "system", content: "sys-msg" },
+      { role: "user", content: "hi" },
+    ], FP);
+    assert.equal(inp[0].role, "developer");
+    assert.ok(inp[0].content.includes("sys-msg"));
+    assert.equal(inp[1].role, "user");
+  });
   it("map image + tool_result + assistant history", () => {
     const inp = toResponsesInput(null, [
       { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AAA" } }] },
@@ -65,6 +74,15 @@ describe("toOpenAiMessages", () => {
     assert.deepEqual(out[1], { role: "user", content: "hi" });
     assert.equal(out[2].tool_calls[0].function.name, "Bash");
     assert.deepEqual(out[3], { role: "tool", tool_call_id: "u1", content: "ok" });
+  });
+  it("message role=system giu lai dang system", () => {
+    const out = toOpenAiMessages("sys", [
+      { role: "system", content: "sys-msg" },
+      { role: "user", content: "hi" },
+    ]);
+    assert.deepEqual(out[0], { role: "system", content: "sys" });
+    assert.deepEqual(out[1], { role: "system", content: "sys-msg" });
+    assert.deepEqual(out[2], { role: "user", content: "hi" });
   });
 });
 

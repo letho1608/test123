@@ -25,6 +25,7 @@ describe("ApiError", () => {
 describe("validateMessagesBody", () => {
   it("body hop le thi khong nem", () => {
     validateMessagesBody({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    validateMessagesBody({ model: "m", messages: [{ role: "system", content: "sys" }, { role: "user", content: "hi" }] });
     validateMessagesBody({});
   });
   it("body sai thi nem 400 co code", () => {

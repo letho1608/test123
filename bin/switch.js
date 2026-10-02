@@ -10,7 +10,7 @@ import { claudeSettingsPath, loadSettings, saveSettings } from "../scripts/lib/s
 
 const PORT = Number(process.env.PORT || 8898);
 const BASE = `http://127.0.0.1:${PORT}`;
-const ALIAS = "claude-sonnet-4-6";
+const ALIAS = "claude-sonnet-5-5";
 
 async function post(path, body) {
   const r = await fetch(BASE + path, {
@@ -60,12 +60,36 @@ async function cmdZen(model) {
 }
 
 async function cmdOllama(model, alias) {
-  alias = alias || "claude-sonnet-4-6";
+  // Mac dinh di qua proxy (nhat quan voi zen-proxy use + dashboard).
+  // Muon di thang nhu cu: them --direct (ollama cp + patch settings tro thang 11434).
+  const direct = alias === "--direct";
   if (!model) {
-    console.error("thieu ten model: npm run switch -- ollama <model-ollama> [alias]");
+    console.error("thieu ten model: npm run switch -- ollama <model-ollama> [--direct]");
     process.exitCode = 1;
     return;
   }
+  if (direct) return cmdOllamaDirect(model);
+  const cfg = loadSettings();
+  cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
+  cfg.modelOverrides[ALIAS] = model;
+  cfg.env = {
+    ...(cfg.env || {}),
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+    ANTHROPIC_API_KEY: "public",
+    ANTHROPIC_MODEL: ALIAS,
+  };
+  const p = saveSettings(cfg);
+  console.log(`da patch ${p} -> ollama qua proxy (model ${model})`);
+  try {
+    const s = await post("/admin/switch", { provider: "ollama", model, clientPatched: true });
+    console.log("proxy:", JSON.stringify(s.json));
+  } catch {
+    console.log("proxy chua chay (mo bang npm start) - settings da luu, mo proxy la dung ngay.");
+  }
+}
+
+async function cmdOllamaDirect(model) {
+  const alias = "claude-sonnet-5-5";
   console.log(`copy ollama: ${model} -> ${alias} ...`);
   const cp = spawnSync("ollama", ["cp", model, alias], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (cp.status !== 0) {
@@ -84,13 +108,7 @@ async function cmdOllama(model, alias) {
     ANTHROPIC_MODEL: alias,
   };
   const p = saveSettings(cfg);
-  console.log(`da patch ${p} -> ollama truc tiep ${model} (alias ${alias}), khong can proxy.`);
-  try {
-    const s = await post("/admin/switch", { backend: "ollama", ollamaModel: model, alias, clientPatched: true });
-    console.log("proxy:", JSON.stringify(s.json));
-  } catch {
-    console.log("proxy chua chay - settings da luu, mo proxy la dung ngay.");
-  }
+  console.log(`da patch ${p} -> ollama truc tiep ${model} (alias ${alias}), khong qua proxy.`);
 }
 
 async function cmdOpenAi(url, key, model) {
@@ -128,7 +146,7 @@ async function main() {
     "dung: npm run switch -- <lenh>   (lenh status tu mo web dashboard)",
     "  status                       xem backend/model proxy dang dung + mo web",
     "  zen [model-zen]              doi sang Zen (can proxy dang chay; tu patch settings)",
-    "  ollama <model> [alias]       doi sang Ollama truc tiep (ollama cp + patch settings)",
+    "  ollama <model> [--direct]    doi sang Ollama qua proxy (mac dinh); --direct = di thang, khong proxy",
     "  openai <url> [key] <model>   doi sang OpenAI-compat tu nhap (bat buoc URL + model)",
   ].join("\n"));
 }
