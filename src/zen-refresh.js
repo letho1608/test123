@@ -3,7 +3,8 @@
 // auto-refresh dinh ky, CLI `refresh zen`.
 import fs from "node:fs";
 import path from "node:path";
-import { ROOT, ZEN_DEFAULT } from "./config.js";
+import { ROOT, ZEN_DEFAULT, loadAssets } from "./config.js";
+import { handleZen } from "./backends/zen.js";
 import { loadProviders, saveProviders } from "./providers/registry.js";
 import { parseJsonText } from "./json.js";
 import { logger } from "./logger.js";
@@ -17,6 +18,33 @@ export function pickFreeModels(apiJson) {
     const c = (ms[id] || {}).cost || {};
     return c.input === 0 && c.output === 0;
   });
+}
+
+let _assets = null;
+// Ping 1 model Zen bang request that (di dung gate fingerprint) nhung khong
+// failover: chi model nay tra loi 200 moi tinh la ok. Re hon e2e nhieu,
+// dung de loc so bo model free moi truoc khi dem di e2e.
+export async function pingZenModel(model) {
+  if (!_assets) _assets = loadAssets();
+  const t0 = Date.now();
+  const body = {
+    model,
+    messages: [{ role: "user", content: "reply with exactly: OK" }],
+    max_tokens: 8,
+    stream: false,
+  };
+  let status = 0, payload = "";
+  const res = {
+    writeHead(s) { status = s; },
+    end(d) { payload = String(d || ""); },
+  };
+  try {
+    await handleZen(body, model, _assets, res, () => {}, { candidates: [model] });
+  } catch (e) {
+    return { ok: false, model, ms: Date.now() - t0, error: String(e?.message || e).slice(0, 200) };
+  }
+  if (status !== 200) return { ok: false, model, ms: Date.now() - t0, error: payload.slice(0, 200) };
+  return { ok: true, model, ms: Date.now() - t0 };
 }
 
 // Model PASS e2e -> dua vao verified that (models.json + providers.json)
@@ -83,6 +111,25 @@ export async function refreshZenCatalog() {
   if (!prev || typeof prev !== "object" || Array.isArray(prev)) prev = {};
   const { catalog, added, removed } = mergeCatalog(prev, freeModels);
   prev.zen = { ...(prev.zen || {}), ...catalog };
+  // Ping model free moi de biet con nao gate nhan that (ghi reachable, dashboard
+  // van chi hien verified). Model cu ping ok tu truoc thi giu, het free thi rot.
+  const prevReachable = Array.isArray(prev.zen.reachable) ? prev.zen.reachable : [];
+  const stillReachable = prevReachable.filter((m) => freeModels.includes(m));
+  const pingedOk = [];
+  const pingedFail = [];
+  for (const m of added) {
+    logger.info(`ping zen model moi: ${m} ...`);
+    const r = await pingZenModel(m);
+    if (r.ok) {
+      pingedOk.push(m);
+      logger.info(`ping ok: ${m} (${r.ms}ms)`);
+    } else {
+      pingedFail.push(m);
+      logger.warn(`ping hong: ${m} (${String(r.error).slice(0, 150)})`);
+    }
+    await new Promise((r2) => setTimeout(r2, 1000));
+  }
+  prev.zen.reachable = [...stillReachable.filter((m) => !pingedOk.includes(m)), ...pingedOk];
   fs.writeFileSync(modelsPath, JSON.stringify(prev, null, 2));
   // Update providers.json: chi dua verified (dung duoc that) vao failover + dashboard
   const providers = loadProviders();
@@ -90,6 +137,6 @@ export async function refreshZenCatalog() {
     providers.zen.config.models = catalog.verified;
     saveProviders(providers);
   }
-  logger.info(`refresh-zen: ${freeModels.length} free (${catalog.verified.length} verified, moi +${added.length}, mat -${removed.length})`);
-  return { count: freeModels.length, verified: catalog.verified, models: freeModels, added, removed };
+  logger.info(`refresh-zen: ${freeModels.length} free (${catalog.verified.length} verified, moi +${added.length}, mat -${removed.length}, ping ok +${pingedOk.length})`);
+  return { count: freeModels.length, verified: catalog.verified, models: freeModels, added, removed, pingOk: pingedOk, pingFail: pingedFail, reachable: prev.zen.reachable };
 }

@@ -142,15 +142,19 @@ export function liveResponsesModels() {
   return RESPONSES_MODELS;
 }
 
-export async function handleZen(body, model, assets, res, log) {
+export async function handleZen(body, model, assets, res, log, opts = {}) {
   // Failover: thu model dang chon truoc, hong thi sang model verified tiep theo.
   // Tra ve model THAT da dung (Claude chap nhan mismatch, da verify).
   // CHI failover loi retryable (mang/429/het quota/gate); loi 4xx khac doi model
   // cung hong nhu nhau -> nem ngay, tranh storm 8 request vo ich.
   // Doc runtime + catalog moi request de doi model / refresh-zen luc dang chay.
+  // opts.candidates: chi dung cho ping kiem tra 1 model (tat failover de khong
+  // hieu nham model khac tra loi thanh cong).
   const verified = liveVerified();
   const responsesModels = liveResponsesModels();
-  const candidates = [runtime.zenModel, ...verified.filter((m) => m !== runtime.zenModel)];
+  const candidates = Array.isArray(opts.candidates) && opts.candidates.length
+    ? opts.candidates
+    : [runtime.zenModel, ...verified.filter((m) => m !== runtime.zenModel)];
   let lastErr = null;
   for (const candidate of candidates) {
     const useResponses = responsesModels.has(candidate);

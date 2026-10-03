@@ -6,6 +6,7 @@ import { isRetryableZen } from "../src/backends/zen.js";
 import { pickFreeModels } from "../src/zen-refresh.js";
 import { mergeCatalog } from "../src/zen-refresh.js";
 import { promoteVerifiedModel } from "../src/zen-refresh.js";
+import { pingZenModel } from "../src/zen-refresh.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -82,5 +83,52 @@ describe("promoteVerifiedModel", () => {
     const { loadProviders } = await import("../src/providers/registry.js");
     assert.deepEqual(loadProviders().zen.config.models, ["a", "b"]);
     delete process.env.PROVIDERS_FILE;
+  });
+});
+
+describe("pingZenModel", () => {
+  it("mang hong thi tra ok:false, khong nem", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new Error("down"));
+    try {
+      const r = await pingZenModel("model-nao-do");
+      assert.equal(r.ok, false);
+      assert.equal(r.model, "model-nao-do");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+  it("upstream 200 thi ok:true, chi ping dung model do (khong failover)", async () => {
+    const seen = [];
+    const realFetch = globalThis.fetch;
+    const enc = new TextEncoder();
+    const sse = 'data: {"choices":[{"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    globalThis.fetch = (url) => {
+      seen.push(String(url));
+      const chunks = [enc.encode(sse)];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        body: {
+          getReader() {
+            let i = 0;
+            return {
+              read: async () => (i < chunks.length
+                ? { done: false, value: chunks[i++] }
+                : { done: true, value: undefined }),
+            };
+          },
+        },
+      });
+    };
+    try {
+      const r = await pingZenModel("ping-test-model");
+      assert.equal(r.ok, true);
+      assert.equal(r.model, "ping-test-model");
+      assert.equal(seen.length, 1);
+      assert.ok(seen[0].endsWith("/chat/completions"));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

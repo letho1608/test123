@@ -212,6 +212,8 @@ async function cmdRefreshZen() {
       console.log(`đã làm mới ${r.json.count || "?"} models từ OpenCode`);
       if (r.json.added?.length) console.log(`  mới: ${r.json.added.join(", ")}`);
       if (r.json.removed?.length) console.log(`  mất: ${r.json.removed.join(", ")}`);
+      if (r.json.pingOk?.length) console.log(`  ping ok: ${r.json.pingOk.join(", ")}`);
+      if (r.json.pingFail?.length) console.log(`  ping hỏng: ${r.json.pingFail.join(", ")}`);
     } else {
       console.error("lỗi:", r.json.error || JSON.stringify(r.json));
       process.exitCode = 1;
