@@ -1,19 +1,23 @@
 // test/config.test.js — hang so + assets (khong can mang)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets, OPENAI_URL, OPENAI_MODEL } from "../src/config.js";
+import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets, OPENAI_URL, OPENAI_MODEL, LOCAL_TIMEOUT_MS, LOCAL_SESSION } from "../src/config.js";
 
 describe("config", () => {
   it("default hop le", () => {
     assert.equal(HOST, "127.0.0.1");
     assert.ok(PORT > 0);
-    assert.ok(["zen", "ollama"].includes(BACKEND));
+    assert.ok(["zen", "local", "openai", "claude"].includes(BACKEND));
     assert.ok(ZEN_BASE.startsWith("https://"));
     assert.ok(ZEN_MODEL.length > 0);
   });
   it("RESPONSES_MODELS chua muse-spark", () => {
     assert.ok(RESPONSES_MODELS.has("muse-spark-1.3-contributor-free"));
     assert.ok(RESPONSES_MODELS.has("muse-spark-1.2-contributor-free"));
+  });
+  it("local default hop le", () => {
+    assert.ok(LOCAL_TIMEOUT_MS >= 60000);
+    assert.equal(typeof LOCAL_SESSION, "string");
   });
   it("MODEL_IDS chua zen + alias claude", () => {
     assert.ok(MODEL_IDS.includes(ZEN_MODEL));

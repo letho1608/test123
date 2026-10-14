@@ -4,14 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, OLLAMA_BASE, OLLAMA_MODEL, ROOT, runtime, ZEN_VERIFIED, ZEN_DEFAULT, ZEN_REFRESH_HOURS, OPENAI_URL, persistRuntime } from "./config.js";
+import { PORT, HOST, BACKEND, MODEL_IDS, ZEN_MODEL, ZEN_BASE, ROOT, runtime, ZEN_VERIFIED, ZEN_DEFAULT, ZEN_REFRESH_HOURS, OPENAI_URL, persistRuntime } from "./config.js";
 import { loadSettings, saveSettings } from "../scripts/lib/settings.js";
 import { logger } from "./logger.js";
 import { ApiError, validateMessagesBody } from "./errors.js";
 import { loadAssets } from "./config.js";
 import { parseJsonText } from "./json.js";
 import { handleZen } from "./backends/zen.js";
-import { handleOllama } from "./backends/ollama.js";
+import { handleLocal, opencodeTarget } from "./backends/local.js";
 import { handleOpenAi } from "./backends/openai.js";
 import { loadProviders, saveProviders, addProvider, updateProvider, removeProvider } from "./providers/registry.js";
 import { refreshZenCatalog } from "./zen-refresh.js";
@@ -44,7 +44,7 @@ function readJson(req) {
 }
 
 async function diag() {
-  const out = { ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, claudeModel: runtime.claudeModel, node: process.version, time: new Date().toISOString(), checks: {} };
+  const out = { ok: true, backend: runtime.backend, zenModel: runtime.zenModel, localModel: runtime.localModel, localSession: runtime.localSession, claudeModel: runtime.claudeModel, node: process.version, time: new Date().toISOString(), checks: {} };
   const dns = await import("node:dns").then((m) => m.promises).catch(() => null);
   try {
     const ips = dns ? await dns.resolve4("opencode.ai") : [];
@@ -60,24 +60,27 @@ async function diag() {
     out.checks.zen_models = { ok: r.ok, status: r.status, ms: Date.now() - t0, sample: txt.slice(0, 120) };
   } catch (e) { out.checks.zen_models = { ok: false, error: String(e).slice(0, 300) }; }
   try {
+    // opencode CLI local: chi can binary chay duoc (khong can mang).
     const t0 = Date.now();
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(new Error("timeout")), 10000);
-    const r = await fetch(new URL("/api/tags", OLLAMA_BASE), { signal: ctl.signal });
-    clearTimeout(t);
-    out.checks.ollama = { ok: r.ok, status: r.status, ms: Date.now() - t0 };
-  } catch (e) { out.checks.ollama = { ok: false, error: String(e).slice(0, 300) }; }
+    const t = opencodeTarget();
+    const r = spawnSync(t.file, ["--version"], { encoding: "utf8", timeout: 15000, shell: t.shell });
+    const ver = (r.stdout || r.stderr || "").trim().split("\n")[0].slice(0, 60);
+    out.checks.opencode_cli = r.status === 0
+      ? { ok: true, version: ver, ms: Date.now() - t0 }
+      : { ok: false, error: (`exit ${r.status}: ${ver}`).slice(0, 200) };
+  } catch (e) { out.checks.opencode_cli = { ok: false, error: String(e).slice(0, 300) }; }
   // ok chung = duong backend dang dung (luc nay, co the doi qua /admin/switch)
   // claude goc bypass proxy -> khong can check upstream, proxy van healthy.
   if (runtime.backend === "claude") out.ok = true;
-  else out.ok = runtime.backend === "ollama" ? !!out.checks.ollama?.ok : !!out.checks.zen_models?.ok;
+  else if (runtime.backend === "local") out.ok = !!out.checks.opencode_cli?.ok;
+  else out.ok = !!out.checks.zen_models?.ok;
   return out;
 }
 
 const DEFAULT_ALIAS = "claude-sonnet-5-5"; // alias Claude gui di, giong switch.js/start.js
 
 // Patch settings.json cua Claude giong hệt switch.js de CLI + web nhat quan:
-// zen/ollama/openai -> di qua proxy; claude -> bypass proxy, dung API Anthropic truc tiep.
+// zen/local/openai -> di qua proxy; claude -> bypass proxy, dung API Anthropic truc tiep.
 function applySwitch(b) {
   if (b.backend === "claude") {
     const model = (typeof b.claudeModel === "string" && b.claudeModel.trim()) || "claude-sonnet-5-5";
@@ -86,7 +89,7 @@ function applySwitch(b) {
     delete cfg.modelOverrides[DEFAULT_ALIAS]; // dung model that, khong rewrite alias
     cfg.env = { ...(cfg.env || {}) };
     delete cfg.env.ANTHROPIC_BASE_URL; // ve API goc api.anthropic.com
-    delete cfg.env.ANTHROPIC_AUTH_TOKEN; // xoa token ollama thua (neu co)
+    delete cfg.env.ANTHROPIC_AUTH_TOKEN; // xoa token thua cua backend cu (neu co)
     if (cfg.env.ANTHROPIC_API_KEY === "public") delete cfg.env.ANTHROPIC_API_KEY; // key ao cua proxy -> dung auth that
     cfg.env.ANTHROPIC_MODEL = model;
     saveSettings(cfg);
@@ -95,7 +98,7 @@ function applySwitch(b) {
   const cfg = loadSettings();
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
   if (b.backend === "zen") cfg.modelOverrides[DEFAULT_ALIAS] = b.zenModel;
-  else if (b.backend === "ollama") cfg.modelOverrides[DEFAULT_ALIAS] = b.ollamaModel;
+  else if (b.backend === "local") cfg.modelOverrides[DEFAULT_ALIAS] = b.localModel || DEFAULT_ALIAS;
   else delete cfg.modelOverrides[DEFAULT_ALIAS];
   cfg.env = {
     ...(cfg.env || {}),
@@ -146,12 +149,12 @@ async function doSwitch(body, label) {
 async function load() {
   try {
     const s = await api("/admin/status");
-    const curModel = s.backend === "ollama" ? (s.ollamaModel || "-")
+    const curModel = s.backend === "local" ? (s.localModel || "(mặc định opencode.json)")
       : s.backend === "zen" ? s.zenModel
       : s.backend === "claude" ? (s.claudeModel || "-")
       : (s.openaiModel || "-") + " @ " + (s.openaiUrl || "-");
     const note = s.backend === "claude" ? " (đi thẳng Anthropic, không qua proxy)"
-      : s.backend === "ollama" ? " (qua proxy, không đi thẳng nữa)" : "";
+      : s.backend === "local" ? (" (opencode CLI, session " + (s.localSession || "mới/request") + ")") : "";
     $("status").innerHTML = '<div class="card"><h3>Đang dùng</h3>'
       + '<div class="big"><b>' + esc(s.provider || s.backend) + '</b> · model=' + esc(curModel) + esc(note) + '</div>'
       + '<div class="muted">đổi model bên dưới, mở session Claude mới để dùng</div></div>';
@@ -159,7 +162,7 @@ async function load() {
     const p = await api("/admin/providers");
     const providers = p.providers || [];
     // provider đang dùng lên đầu, rồi built-in, rồi tự thêm (a-z)
-    const order = { zen: 0, ollama: 1, claude: 2 };
+    const order = { zen: 0, local: 1, claude: 2 };
     providers.sort((a, b) => {
       const ac = s.provider === a.id, bc = s.provider === b.id;
       if (ac !== bc) return ac ? -1 : 1;
@@ -170,10 +173,12 @@ async function load() {
     });
     let html = "";
     for (const prov of providers) {
-      const isCustom = !["zen", "ollama", "claude"].includes(prov.id);
+      const isCustom = !["zen", "local", "claude"].includes(prov.id);
       html += '<div class="card"><h3>' + esc(prov.name) + ' (' + esc(prov.type) + ')' + (isCustom ? ' <button data-del-provider="' + esc(prov.id) + '">xóa</button>' : '') + '</h3>';
-      if (prov.type === "ollama") {
-        html += '<div id="ollama-models"></div>';
+      if (prov.type === "local") {
+        html += '<p class="muted">opencode CLI trên máy này (chạy opencode run -s, tool chạy nội bộ trong opencode, không qua server opencode.ai). Model trống = dùng mặc định trong opencode.json.</p>';
+        html += '<div class="muted">OPENCODE_BIN: đường dẫn binary opencode (Windows mặc định opencode.cmd).</div>';
+        html += '<div class="row"><button data-local-use="1" type="button">dùng opencode mặc định</button><button data-local-reset="1" type="button">reset session opencode</button></div>';
       } else if (prov.type === "zen") {
         const z = await api("/admin/zen-models");
         const zlist = z.verified || [];
@@ -212,21 +217,16 @@ async function load() {
         else say("Lỗi: " + (j.error || JSON.stringify(j)).slice(0, 300));
       } catch (e) { say("Lỗi kết nối proxy: " + String(e).slice(0, 200)); }
     });
-    // Load ollama models if ollama provider exists
-    const ollamaProv = providers.find((p) => p.type === "ollama");
-    if (ollamaProv) {
-      const o = await api("/admin/ollama-models");
-      const ollamaHtml = o.ok
-        ? ((o.models || []).map((m) =>
-          "<li><span>" + esc(m) + "</span>"
-          + '<button data-ollama="' + esc(m) + '">dùng</button></li>').join("") || "<li>ollama chưa có model (chạy ollama pull &lt;model&gt; trước)</li>")
-        : "<li>không nối được Ollama (" + esc((o.error || "").slice(0, 120)) + ")</li>";
-      const el = $("ollama-models");
-      if (el) {
-        el.innerHTML = "<ul>" + ollamaHtml + "</ul>";
-        document.querySelectorAll("[data-ollama]").forEach((b) => b.onclick = () => doSwitch({ provider: "ollama", model: b.dataset.ollama }, "ollama/" + b.dataset.ollama));
-      }
-    }
+    // Bind local buttons
+    document.querySelectorAll("[data-local-use]").forEach((b) => b.onclick = () => doSwitch({ provider: "local", model: "" }, "local/(mặc định opencode.json)"));
+    document.querySelectorAll("[data-local-reset]").forEach((b) => b.onclick = async () => {
+      say("đang reset session opencode...");
+      try {
+        const j = await api("/admin/local-reset", {});
+        if (j.ok) { say("Xong: session opencode mới = " + j.localSession + " (mở session Claude mới để dùng)"); load(); }
+        else say("Lỗi: " + (j.error || JSON.stringify(j)).slice(0, 300));
+      } catch (e) { say("Lỗi kết nối proxy: " + String(e).slice(0, 200)); }
+    });
   } catch (e) { say("Lỗi kết nối proxy: " + String(e).slice(0, 200)); }
 }
 $("refresh").onclick = load;
@@ -297,7 +297,8 @@ const server = http.createServer(async (req, res) => {
         backend: runtime.backend,
         provider: currentProvider,
         zenModel: runtime.zenModel,
-        ollamaModel: runtime.ollamaModel,
+        localModel: runtime.localModel,
+        localSession: runtime.localSession,
         openaiUrl: runtime.openaiUrl,
         openaiModel: runtime.openaiModel,
         claudeModel: runtime.claudeModel,
@@ -340,7 +341,7 @@ const server = http.createServer(async (req, res) => {
       const b = await readJson(req);
       const id = typeof b.id === "string" ? b.id.trim().toLowerCase() : "";
       if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(id)) throw ApiError.badRequest("id chi gom chu thuong/so/gach-ngang (vd: groq)");
-      if (["zen", "ollama", "claude"].includes(id)) throw ApiError.badRequest(`"${id}" la built-in, khong duoc ghi de`);
+      if (["zen", "local", "claude"].includes(id)) throw ApiError.badRequest(`"${id}" la built-in, khong duoc ghi de`);
       const url = typeof b.url === "string" ? b.url.trim() : "";
       if (!url) throw ApiError.badRequest("thieu chat-completions URL");
       try { new URL(url); } catch { throw ApiError.badRequest("URL khong hop le"); }
@@ -385,29 +386,19 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true, id }));
       return;
     }
-    if (req.method === "GET" && pathname === "/admin/ollama-models") {
+    // --- Admin: reset session opencode sticky (request sau tao session moi) ---
+    if (req.method === "POST" && pathname === "/admin/local-reset") {
+      runtime.localSession = "";
+      persistRuntime();
+      logger.info("local session reset (request sau tao moi)");
       res.writeHead(200, { "Content-Type": "application/json" });
-      try {
-        const providers = loadProviders();
-        const ollamaProvider = providers.ollama;
-        const ollamaBase = ollamaProvider?.config?.url || OLLAMA_BASE;
-        const ctl = new AbortController();
-        const t = setTimeout(() => ctl.abort(new Error("timeout")), 10000);
-        const r = await fetch(new URL("/api/tags", ollamaBase), { signal: ctl.signal });
-        clearTimeout(t);
-        if (!r.ok) throw new Error(`ollama status ${r.status}`);
-        const j = await r.json();
-        const models = ((j || {}).models || []).map((m) => m.name || m.model).filter(Boolean);
-        res.end(JSON.stringify({ ok: true, models }));
-      } catch (e) {
-        res.end(JSON.stringify({ ok: false, models: [], error: String(e).slice(0, 200) }));
-      }
+      res.end(JSON.stringify({ ok: true, localSession: "" }));
       return;
     }
     if (req.method === "POST" && pathname === "/admin/switch") {
       // Doi backend/model luc dang chay, khong can restart. Chi nghe localhost.
       // Web dashboard hoac switch.js gui them clientPatched=true khi da tu patch
-      // settings.json + ollama cp o client; khong thi server lam tron goi.
+      // settings.json o client; khong thi server lam tron goi.
       // Thu tu bat buoc: validate het -> apply (co the fail) -> cuoi cung moi
       // commit runtime, de switch that bai khong de lai runtime nua voi.
       const b = await readJson(req);
@@ -417,23 +408,25 @@ const server = http.createServer(async (req, res) => {
         const prov = providers[b.provider];
         if (!prov) throw ApiError.badRequest(`provider "${b.provider}" khong ton tai`);
         if (prov.enabled === false) throw ApiError.badRequest(`provider "${b.provider}" bi disable`);
-        const model = b.model || prov.config?.models?.[0];
-        if (!model) throw ApiError.badRequest(`provider "${b.provider}" chua co model nao`);
+        // local cho phep model rong (= dung mac dinh trong opencode.json).
+        const model = b.model || (prov.type === "local" ? runtime.localModel || "" : prov.config?.models?.[0]);
+        if (!model && prov.type !== "local") throw ApiError.badRequest(`provider "${b.provider}" chua co model nao`);
         const next = {
-          backend: prov.type === "zen" ? "zen" : prov.type === "ollama" ? "ollama" : prov.type === "claude" ? "claude" : "openai",
+          backend: prov.type === "zen" ? "zen" : prov.type === "local" ? "local" : prov.type === "claude" ? "claude" : "openai",
           zenModel: runtime.zenModel,
-          ollamaModel: runtime.ollamaModel,
+          localModel: runtime.localModel,
+          localSession: runtime.localSession,
           openaiUrl: prov.config?.url || "",
           openaiKey: prov.config?.apiKey || "",
           openaiModel: model,
           claudeModel: runtime.claudeModel,
         };
         if (next.backend === "zen") next.zenModel = model;
-        if (next.backend === "ollama") next.ollamaModel = model;
+        if (next.backend === "local") next.localModel = model;
         if (next.backend === "claude") next.claudeModel = model;
         let extra = {};
         if (!b.clientPatched) {
-          extra = applySwitch({ backend: next.backend, zenModel: next.zenModel, ollamaModel: next.ollamaModel, openaiUrl: next.openaiUrl, claudeModel: next.claudeModel, alias: b.alias });
+          extra = applySwitch({ backend: next.backend, zenModel: next.zenModel, localModel: next.localModel, openaiUrl: next.openaiUrl, claudeModel: next.claudeModel, alias: b.alias });
         }
         Object.assign(runtime, next);
         persistRuntime();
@@ -442,13 +435,14 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ ok: true, provider: b.provider, backend: runtime.backend, model, ...extra }));
         return;
       }
-      if (b.backend !== undefined && !["zen", "ollama", "openai", "claude"].includes(b.backend)) {
-        throw ApiError.badRequest("backend phai la zen|ollama|openai|claude");
+      if (b.backend !== undefined && !["zen", "local", "openai", "claude"].includes(b.backend)) {
+        throw ApiError.badRequest("backend phai la zen|local|openai|claude");
       }
       const next = {
         backend: b.backend || runtime.backend,
         zenModel: runtime.zenModel,
-        ollamaModel: runtime.ollamaModel,
+        localModel: runtime.localModel,
+        localSession: runtime.localSession,
         openaiUrl: runtime.openaiUrl,
         openaiKey: runtime.openaiKey,
         openaiModel: runtime.openaiModel,
@@ -458,12 +452,11 @@ const server = http.createServer(async (req, res) => {
         if (typeof b.zenModel !== "string" || !b.zenModel.trim()) throw ApiError.badRequest("zenModel phai la string khac rong");
         next.zenModel = b.zenModel;
       }
-      if (b.ollamaModel !== undefined) {
-        if (typeof b.ollamaModel !== "string" || !b.ollamaModel.trim()) throw ApiError.badRequest("ollamaModel phai la string khac rong");
-        next.ollamaModel = b.ollamaModel;
-      }
-      if (next.backend === "ollama" && b.backend === "ollama" && !b.ollamaModel) {
-        throw ApiError.badRequest("doi sang ollama can ollamaModel");
+      for (const k of ["localModel", "localSession"]) {
+        if (b[k] !== undefined) {
+          if (typeof b[k] !== "string") throw ApiError.badRequest(`${k} phai la string`);
+          next[k] = b[k];
+        }
       }
       if (b.claudeModel !== undefined) {
         if (typeof b.claudeModel !== "string" || !b.claudeModel.trim()) throw ApiError.badRequest("claudeModel phai la string khac rong");
@@ -484,17 +477,17 @@ const server = http.createServer(async (req, res) => {
       }
       let extra = {};
       if (b.backend !== undefined && !b.clientPatched) {
-        extra = applySwitch({ backend: next.backend, zenModel: next.zenModel, ollamaModel: next.ollamaModel, openaiUrl: next.openaiUrl, claudeModel: next.claudeModel, alias: b.alias });
+        extra = applySwitch({ backend: next.backend, zenModel: next.zenModel, localModel: next.localModel, openaiUrl: next.openaiUrl, claudeModel: next.claudeModel, alias: b.alias });
       }
       Object.assign(runtime, next);
       persistRuntime(); // tat proxy bat lai van giu info cu (dashboard hien dung)
-      logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} ollama=${runtime.ollamaModel || "-"} openai=${runtime.openaiModel || "-"} @ ${runtime.openaiUrl} claude=${runtime.claudeModel || "-"}`);
+      logger.info(`admin switch -> backend=${runtime.backend} zen=${runtime.zenModel} local=${runtime.localModel || "(mac dinh)"}@${runtime.localSession} openai=${runtime.openaiModel || "-"} @ ${runtime.openaiUrl} claude=${runtime.claudeModel || "-"}`);
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, ollamaModel: runtime.ollamaModel, openaiUrl: runtime.openaiUrl, openaiModel: runtime.openaiModel, claudeModel: runtime.claudeModel, ...extra }));
+      res.end(JSON.stringify({ ok: true, backend: runtime.backend, zenModel: runtime.zenModel, localModel: runtime.localModel, localSession: runtime.localSession, openaiUrl: runtime.openaiUrl, openaiModel: runtime.openaiModel, claudeModel: runtime.claudeModel, ...extra }));
       return;
     }
     if (req.method === "GET" && (pathname === "/v1/models" || pathname === "/models")) {
-      const ids = runtime.backend === "ollama" && runtime.ollamaModel ? [runtime.ollamaModel, ...MODEL_IDS] : MODEL_IDS;
+      const ids = [...MODEL_IDS];
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ object: "list", data: [...new Set(ids)].map((id) => ({ id, object: "model", created: Date.now(), owned_by: runtime.backend })) }));
       return;
@@ -543,16 +536,15 @@ const server = http.createServer(async (req, res) => {
     // Doc runtime moi request (doi duoc luc dang chay qua /admin/switch).
     const backend = runtime.backend;
     if (backend === "claude") {
-      throw ApiError.misconfigured("dang dung Claude goc (bypass proxy) — request truc tiep api.anthropic.com, khong qua proxy. Doi lai zen/ollama/openai de dung proxy.");
+      throw ApiError.misconfigured("dang dung Claude goc (bypass proxy) — request truc tiep api.anthropic.com, khong qua proxy. Doi lai zen/local/openai de dung proxy.");
     }
-    const model = body.model || (backend === "ollama" ? runtime.ollamaModel : runtime.zenModel);
+    const model = body.model || (backend === "local" ? (runtime.localModel || "opencode-mac-dinh") : runtime.zenModel);
     const log = (m) => logger.info(m);
     log(`HIT ${backend} model=${model} stream=${body.stream !== false} tools=${(body.tools || []).length}`);
-    if (backend === "ollama") {
-      if (!runtime.ollamaModel) throw ApiError.misconfigured("chua chon model ollama (doi qua /admin/switch hoac env OLLAMA_MODEL)");
+    if (backend === "local") {
       // return await (khong phai return thuong): de rejection chay qua catch ->
       // sendError, neu khong client treo vinh vien + FATAL unhandledRejection.
-      return await handleOllama(body, model, res, log);
+      return await handleLocal(body, model, res, log);
     }
     if (backend === "openai") {
       return await handleOpenAi(body, model, res, log, { url: runtime.openaiUrl, apiKey: runtime.openaiKey, model: runtime.openaiModel });

@@ -33,7 +33,7 @@ async function main() {
   const ok = !!(diag && diag.ok);
   if (ok) {
     saveFails(0);
-    console.log(`OK backend=${diag.backend} zen=${diag.checks?.zen_models?.ok} ollama=${diag.checks?.ollama?.ok}`);
+    console.log(`OK backend=${diag.backend} zen=${diag.checks?.zen_models?.ok} local=${diag.checks?.opencode_cli?.ok}`);
     return;
   }
   const fails = loadFails() + 1;

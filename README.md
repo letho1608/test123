@@ -1,8 +1,14 @@
 # zen-proxy
 
-Proxy localhost cho **Claude Code**: dùng model **OpenCode Zen free tier** (không cần key),
-**Ollama** local, **Claude gốc** (API key của bạn), hoặc bất kỳ endpoint **OpenAI-compatible**
-nào (Groq, Cerebras, NVIDIA NIM, OpenRouter...) — tất cả qua 1 lệnh duy nhất.
+Proxy localhost cho **Claude Code**: dùng **opencode CLI trên máy này** (không qua
+server opencode.ai — tool chạy nội bộ trong opencode), **OpenCode Zen free tier**
+(không cần key), **Claude gốc** (API key của bạn), hoặc bất kỳ endpoint
+**OpenAI-compatible** nào (Groq, Cerebras, NVIDIA NIM, OpenRouter...) — tất cả qua 1 lệnh duy nhất.
+
+Luồng backend local (khuyên dùng): Claude Code → proxy (`ANTHROPIC_BASE_URL`
+về `127.0.0.1:8898`) → `opencode run -s <session>` trên máy → provider bạn đã
+cấu trong `opencode.json` → text cuối trả về Claude hiển thị. Tools của Claude
+bị lột đi — Claude chỉ làm màn hình, không gọi server Anthropic.
 
 ## Lệnh `zen-proxy` (khuyên dùng)
 
@@ -10,8 +16,8 @@ nào (Groq, Cerebras, NVIDIA NIM, OpenRouter...) — tất cả qua 1 lệnh duy
 cd zen-claude-proxy
 node bin/zen-proxy.js start                        # chạy proxy nền ở http://127.0.0.1:8898
 node bin/zen-proxy.js providers                    # liệt kê providers + models, đánh dấu cái đang dùng
+node bin/zen-proxy.js use local:9router/ag/x          # opencode CLI, model trong opencode.json
 node bin/zen-proxy.js use zen:muse-spark-1.3-contributor-free
-node bin/zen-proxy.js use ollama:qwen2.5            # ollama cũng đi qua proxy
 node bin/zen-proxy.js use claude:claude-sonnet-5-5  # claude gốc: đi thẳng api.anthropic.com, tốn phí TK bạn
 node bin/zen-proxy.js use groq:llama-3.3-70b-versatile
 node bin/zen-proxy.js providers add myep --url https://.../chat/completions --key xxx --models m1,m2
@@ -65,8 +71,10 @@ ln -sf ~/zen-claude-proxy/bin/status ~/.local/bin/status
 Chưa cài thì đứng trong thư mục `bin` gõ `status` (Windows) hoặc `./status` (Ubuntu).
 Mở tay cũng được: `http://127.0.0.1:8898/` (đúng port proxy đang chạy).
 
+- **Opencode CLI local (khuyên dùng):** tool chạy trong `opencode` máy bạn, session
+  dài sticky (`LOCAL_SESSION`, reset bằng nút "reset session opencode" trên dashboard
+  hoặc `POST /admin/local-reset`). Model trống = mặc định trong `opencode.json`.
 - **Zen free tier:** bấm dùng 1 trong các model verified (nút "cập nhật zen" để tải list mới nhất)
-- **Ollama local:** bấm dùng 1 trong số model `ollama list` (đi qua proxy, không đi thẳng nữa)
 - **Claude gốc:** bấm dùng để đi thẳng API Anthropic (tốn phí tài khoản của bạn)
 - **OpenAI-compatible đã lưu:** mỗi cấu hình có nút dùng từng model + nút xóa
 - **OpenAI-compatible tự nhập:** nhập tên + URL/key/models rồi "lưu & dùng"
@@ -75,8 +83,8 @@ Mở tay cũng được: `http://127.0.0.1:8898/` (đúng port proxy đang chạ
 Dùng lệnh cũng được:
 
 ```bash
+npm run switch -- local [model-opencode]  # vd: npm run switch -- local 9router/ag/x (trống = mặc định opencode.json)
 npm run switch -- zen [model-zen]     # vd: npm run switch -- zen big-pickle
-npm run switch -- ollama <model> [--direct]  # mặc định qua proxy; --direct = đi thẳng, không proxy
 npm run switch -- openai <url> [key] <model>
 ```
 
@@ -84,7 +92,8 @@ npm run switch -- openai <url> [key] <model>
 
 - Node.js >= 18 (không cần gì thêm)
 - Claude Code cài qua npm: `npm i -g @anthropic-ai/claude-code`
-- Backend Ollama: đã cài + start Ollama, đã `ollama pull <model>`
+- Backend local: đã cài opencode CLI (`opencode --version` chạy được) + model/key
+  đã cấu trong `~/.config/opencode/opencode.json`
 
 ## Chạy
 
@@ -97,15 +106,15 @@ Chi tiết từng lệnh cài trên Ubuntu xem file `docs/INSTALL-UBUNTU.txt`.
 Menu:
 
 ```text
-1. Ollama (model đã cài trên máy)
+1. Opencode CLI local (KHUYEN DUNG) - tool chay trong `opencode` may nay
 2. OpenCode Zen free tier (muse-spark-1.3-contributor-free, không cần key)
 3. OpenAI-compatible custom (tự nhập URL/key/model)
 4. Exit
 ```
 
-Chọn `1` → liệt kê `ollama list` để pick model, rồi tự `ollama cp` sang tên
-dạng `claude-*` (Claude Code chỉ gửi đi tên model bắt đầu bằng `claude-`,
-còn Ollama chỉ serve tên nó biết — copy là cầu nối). **Đi thẳng, không qua proxy.**
+Chọn `1` → nhập model opencode (ENTER = mặc định trong `opencode.json`) + thư mục
+làm việc (`LOCAL_CWD`). Proxy chạy `opencode run -s <session>` cho mỗi request
+Claude: session dài, tool-call liên tục nằm gọn trong opencode.
 Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
 nhưng không cần cài opencode) để pick, mặc định là `muse-spark-1.3-contributor-free`.
 Chọn `3` → OpenAI-compatible custom: tự nhập URL/key/model
@@ -158,15 +167,15 @@ src/
   json.js            parse JSON chịu BOM Windows
   zen-refresh.js     tải + lọc model Zen free (endpoint refresh, auto-refresh)
   providers/
-    registry.js      multi-provider registry (zen/ollama/claude/openai tự thêm)
+    registry.js      multi-provider registry (zen/local/claude/openai tự thêm)
   translators/
     anthropic.js     blocks Anthropic + map tool opencode->Claude
     responses.js     Anthropic <-> Responses API (zen)
-    openai.js        Anthropic <-> Chat Completions (ollama + zen-chat)
-  sse.js             đọc SSE + khung SSE Anthropic (dùng chung 2 backend)
+    openai.js        Anthropic <-> Chat Completions (openai + zen-chat)
+  sse.js             đọc SSE + khung SSE Anthropic (dùng chung zen/openai/local)
   backends/
+    local.js         opencode CLI local (`opencode run -s`, lot tools Claude)
     zen.js           Zen free tier (fingerprint, retry, failover, route /responses|/chat)
-    ollama.js        Ollama qua proxy (pass-through OpenAI-compat)
     openai.js        OpenAI-compat tự nhập URL/key/model
   server.js          routes, validation, graceful shutdown, /diag, web dashboard /
 assets/              prompt/tools mẫu cho free-tier gate (agentdev.txt, decoy_tools.json, fp.json)
@@ -176,7 +185,7 @@ scripts/             healthcheck.mjs, test-e2e.js (kiểm định tool-loop th�
   lib/settings.js    đọc/ghi + backup/restore settings.json của Claude
 test/                unit test offline (`npm test`, vài giây)
 models.json          danh sách model free + route endpoint (1 nguồn duy nhất)
-providers.json       registry providers (built-in zen/ollama/claude + tự thêm, sửa tay có hiệu lực ngay)
+providers.json       registry providers (built-in zen/local/claude + tự thêm, sửa tay có hiệu lực ngay)
 verified.json        kết quả test-e2e (menu đọc để gắn tag)
 ```
 
@@ -190,6 +199,18 @@ rồi ghi kết quả vào `verified.json`. Menu đọc file này để gắn ta
 - Lần quét gần nhất (trong `verified.json`): cả 8 model free đều PASS tool loop.
   Lưu ý: quét dồn dập có thể ăn `429 FreeUsageLimitError` (rate limit phía Zen) —
   đợi vài phút chạy lại con đó là pass.
+
+## Proxy backend local hoạt động thế nào
+
+Mỗi request `POST /v1/messages` của Claude Code được ép thành 1 prompt text
+(`src/backends/local.js: buildLocalPrompt`, giữ full history + nhãn role) rồi
+chạy `opencode run -s <LOCAL_SESSION> [--model <LOCAL_MODEL>]`. Opencode tự
+loop tool nội bộ tới khi xong; text cuối gói thành message Anthropic
+`stop_reason: end_turn` trả về. `tools` của Claude bị lột — Claude không chạy
+tool nào. Session dài = tái dùng cùng `-s` (xem `POST /admin/local-reset` để
+đổi session mới). Task cần duyệt quyền mà không ai duyệt sẽ treo tới
+`LOCAL_TIMEOUT_MS` (mặc định 10 phút) rồi báo 504 — nên cấu `permissions` cho
+agent relay hoặc dùng `LOCAL_AGENT` read-only.
 
 ## Proxy backend Zen hoạt động thế nào
 
@@ -226,9 +247,9 @@ Backend và Claude chạy **cùng máy, localhost-only** (`127.0.0.1`), Windows 
 1. Kiểm tra backend có nghe không:
    - Windows (PowerShell): `curl.exe -s http://127.0.0.1:8898/`
    - Ubuntu: `curl -s http://127.0.0.1:8898/`
-   - Phải thấy web dashboard `zen-proxy`. Nếu `Connection refused` → chạy `npm start` (chọn 2) trước rồi mới mở Claude.
-2. Kiểm tra đường ra mạng của máy: mở `http://127.0.0.1:8898/diag` trên browser —
-   xem `zen_models.ok` có `true` không. Nếu `false`, đọc `error` trong đó (DNS/timeout/...)
-   rồi gửi output cho người debug.
+   - Phải thấy web dashboard `zen-proxy`. Nếu `Connection refused` → chạy `npm start` (chọn 1 cho local) trước rồi mới mở Claude.
+2. Kiểm tra opencode CLI (backend local): mở `http://127.0.0.1:8898/diag` trên browser —
+   xem `checks.opencode_cli.ok` có `true` không. Nếu `false`, cài opencode CLI
+   và cấu model/key trong `opencode.json` trước.
 3. Đổi port thì đổi cả 2 chỗ: `PORT=9000 npm start` + `ANTHROPIC_BASE_URL`
    trong settings.json (hoặc chạy lại `npm start`, nó patch lại).

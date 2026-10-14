@@ -1,4 +1,4 @@
-// providers/registry.js — quản lý nhiều provider (zen, ollama, groq, cerebras...)
+// providers/registry.js — quản lý nhiều provider (zen, local, groq, cerebras...)
 // Đọc providers.json + models.json, cung cấp API để server/CLI dùng.
 import fs from "node:fs";
 import path from "node:path";
@@ -22,13 +22,12 @@ const BUILTINS = {
       models: [],
     },
   },
-  ollama: {
-    type: "ollama",
-    name: "Ollama",
+  local: {
+    type: "local",
+    name: "Opencode CLI (máy này)",
     enabled: true,
     config: {
-      url: "http://127.0.0.1:11434/v1",
-      apiKey: "",
+      // model rong = dung model mac dinh trong opencode.json.
       models: [],
     },
   },

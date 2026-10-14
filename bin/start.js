@@ -1,7 +1,8 @@
 // start.js — menu khoi dong proxy (Windows + Ubuntu, chi can Node >= 18)
-//   1: backend Ollama (chon model trong `ollama list`)
-//   2: backend opencode zen (free tier)
-//   3: exit
+//   1: backend opencode CLI local (khuyen dung: tool chay trong opencode may nay)
+//   2: backend opencode zen (free tier, qua proxy)
+//   3: backend OpenAI-compatible custom
+//   4: exit
 // Tu patch ~/.claude/settings.json (merge modelOverrides, giu cac key khac).
 import readline from "node:readline";
 import { spawn, spawnSync } from "node:child_process";
@@ -16,7 +17,7 @@ const ROOT = path.dirname(HERE); // repo root (file nay nam trong bin/)
 const PORT = Number(process.env.PORT || 8898);
 const IS_WIN = process.platform === "win32";
 const CLAUDE_SETTINGS = claudeSettingsPath();
-const ALIAS = "claude-sonnet-5-5"; // alias doi cao, ollama cp sang ten nay de nhin thay
+const ALIAS = "claude-sonnet-5-5"; // alias Claude gui di (proxy tu route sang backend that)
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 // stdin pipe (khong phai terminal, vd test tu dong): doc het len truoc roi tra loi tuan tu.
@@ -61,11 +62,30 @@ function claudeEnvLines(baseUrl, model, authToken) {
   ];
 }
 
-function ollamaModels() {
-  // stdio[0]=ignore: khong de ollama nut stdin cua menu
-  const r = spawnSync("ollama", ["list"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+function opencodeTarget() {
+  // Giong src/backends/local.js nhung viet rieng de start.js khong phu thuoc config.
+  if (process.env.OPENCODE_BIN) return { file: process.env.OPENCODE_BIN, shell: false };
+  if (process.platform !== "win32") return { file: "opencode", shell: false };
+  try {
+    const w = spawnSync("where.exe", ["opencode.cmd"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const cmdPath = (w.stdout || "").split(/\r?\n/).map((s) => s.trim()).find((s) => s.toLowerCase().endsWith("opencode.cmd"));
+    if (cmdPath) {
+      const txt = fs.readFileSync(cmdPath, "utf8");
+      const m = txt.match(/"([^"]+)"\s+%\*/);
+      if (m) {
+        const entry = m[1].replace(/%~?dp0%|%dp0%/gi, path.dirname(cmdPath) + path.sep).replace(/\\+/g, "\\");
+        if (entry && fs.existsSync(entry)) return { file: entry, shell: false };
+      }
+    }
+  } catch {}
+  return { file: "opencode.cmd", shell: true };
+}
+function opencodeCheck() {
+  // stdio[0]=ignore: khong de opencode nut stdin cua menu
+  const t = opencodeTarget();
+  const r = spawnSync(t.file, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: t.shell });
   if (r.error || r.status !== 0) return null;
-  return r.stdout.split("\n").slice(1).map((l) => l.trim().split(/\s+/)[0]).filter((n) => n && n !== "NAME");
+  return (r.stdout || "").trim().split("\n")[0].slice(0, 60);
 }
 
 // Cai systemd user service de chay nen (chi Linux, can systemctl).
@@ -232,8 +252,8 @@ async function waitReady(port, ms = 15000) {
 async function main() {
   await autoUpdate();
   ensureLocalhostBypass();
-  console.log("== chon backend cho proxy zen-proxy ==");
-  console.log("1. Ollama TRUC TIEP (khong qua proxy) - can ollama + model da pull");
+  console.log("== chon backend cho proxy ==");
+  console.log("1. Opencode CLI local (KHUYEN DUNG) - tool chay trong `opencode` may nay");
   console.log("2. OpenCode Zen free tier (qua proxy, localhost)");
   console.log("3. OpenAI-compatible custom (tu nhap URL/key/model: Groq / Cerebras / NVIDIA...)");
   console.log("4. Exit");
@@ -242,34 +262,30 @@ async function main() {
   if (pick !== "1" && pick !== "2" && pick !== "3") { rl.close(); return; }
 
   if (pick === "1") {
-    // Ollama noi native /v1/messages tu v0.14 -> di thang, khong can proxy.
-    // Claude Code chi gui ten model di (bat dau bang claude-), nen cp model sang ten do.
-    const models = ollamaModels();
-    if (!models) { console.error("khong chay duoc `ollama list` (chua cai ollama hoac chua start?)"); rl.close(); process.exitCode = 1; return; }
-    if (!models.length) { console.error("ollama chua co model nao (`ollama pull <model>` truoc)"); rl.close(); process.exitCode = 1; return; }
-    console.log("model ollama:");
-    models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-    const n = Number(await ask(`chon model [1-${models.length}] (mac dinh 1): `) || "1");
-    const src = models[n - 1] || models[0];
-    const alias = (await ask("alias Claude de dung [claude-sonnet-5-5]: ")) || "claude-sonnet-5-5";
-    console.log(`copy ollama: ${src} -> ${alias} ...`);
-    const cp = spawnSync("ollama", ["cp", src, alias], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    if (cp.status !== 0) { console.error("ollama cp that bai:", (cp.stderr || "").slice(0, 300)); rl.close(); process.exitCode = 1; return; }
+    // Opencode CLI local: Claude Code -> proxy -> `opencode run -s` tren may nay.
+    const ver = opencodeCheck();
+    if (!ver) { console.error('khong chay duoc `opencode --version` (chua cai opencode CLI hoac chua co trong PATH?)'); rl.close(); process.exitCode = 1; return; }
+    console.log(`opencode: ${ver}`);
+    const model = (await ask("model opencode (vd 9router/ag/x, ENTER = mac dinh trong opencode.json): ")).trim();
+    const cwd = (await ask(`thu muc opencode chay trong [${process.cwd()}]: `)).trim() || process.cwd();
     const cfg = loadSettings();
-    cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
-    delete cfg.modelOverrides[alias]; // di thang: khong rewrite ten model
+    cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: model || ALIAS };
     cfg.env = {
       ...(cfg.env || {}),
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:11434",
-      ANTHROPIC_AUTH_TOKEN: "ollama",
-      ANTHROPIC_API_KEY: "ollama",
-      ANTHROPIC_MODEL: alias,
+      ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
+      ANTHROPIC_API_KEY: "public",
+      ANTHROPIC_MODEL: ALIAS,
     };
     saveSettings(cfg);
-    console.log(`da patch ${CLAUDE_SETTINGS} (di thang ollama, khong proxy)`);
+    console.log(`da patch ${CLAUDE_SETTINGS} (di qua proxy -> opencode CLI local)`);
     rl.close();
-    console.log("\nXONG. Mo terminal khac chay:\n  " + claudeEnvLines("http://127.0.0.1:11434", alias, "ollama").join("\n  ") + "\n");
-    console.log("(settings.json da co san env, thuong mo `claude` la chay, khoi export.)");
+    const env = { ...process.env, PORT: String(PORT), BACKEND: "local", LOCAL_CWD: cwd };
+    if (model) env.LOCAL_MODEL = model;
+    console.log(`\nbackend=local model=${model || "(mac dinh opencode.json)"} cwd=${cwd}\nMo terminal khac chay claude (settings.json da co san env).\n`);
+    const p = spawn(process.execPath, [path.join(ROOT, "proxy.mjs")], { env, stdio: "inherit" });
+    if (await waitReady(PORT)) console.log(`\nproxy READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
+    else console.log(`\nCANH BAO: proxy chua nghe sau 15s. Kiem tra log o tren.`);
+    p.on("exit", (c) => process.exit(c ?? 0));
     return;
   }
 

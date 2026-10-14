@@ -6,7 +6,7 @@ export const Codes = {
   UPSTREAM_UNREACHABLE: "upstream_unreachable", // 502: khong noi duoc backend
   FREETIER_DENIED: "freetier_denied",     // 400: Zen tu choi free tier (gate)
   UPSTREAM_ERROR: "upstream_error",       // 502/4xx/5xx: backend bao loi
-  MISCONFIGURED: "misconfigured",         // 500: thieu cau hinh (vd chua chon model ollama)
+  MISCONFIGURED: "misconfigured",         // 500: thieu cau hinh (vd thieu URL openai)
   NOT_FOUND: "not_found",                 // 404: sai endpoint
   INTERNAL: "internal",                   // 500: loi code
 };

@@ -1,7 +1,7 @@
 {
   "name": "zen-claude-proxy",
   "version": "1.2.0",
-  "description": "Chay model OpenCode Zen free tier hoac Ollama local ben trong Claude Code",
+  "description": "Dung opencode CLI local (hoac model OpenCode Zen free tier) ben trong Claude Code",
   "type": "module",
   "bin": {
     "zen-proxy": "./bin/zen-proxy.js"

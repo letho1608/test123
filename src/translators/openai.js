@@ -1,4 +1,4 @@
-// translators/openai.js — Anthropic <-> OpenAI Chat Completions (ollama + zen-chat).
+// translators/openai.js — Anthropic <-> OpenAI Chat Completions (openai + zen-chat).
 // (pure functions, co unit test)
 import { textOf, toolResultText, toToolUseBlock } from "./anthropic.js";
 

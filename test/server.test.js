@@ -59,12 +59,12 @@ describe("admin", () => {
     const before = await (await fetch(base + "/admin/status")).json();
     const r = await fetch(base + "/admin/switch", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ backend: "ollama" }), // thieu ollamaModel -> 400
+      body: JSON.stringify({ backend: "openai" }), // thieu url/model -> 400
     });
     assert.equal(r.status, 400);
     const after = await (await fetch(base + "/admin/status")).json();
     assert.equal(after.backend, before.backend);
-    assert.equal(after.ollamaModel, before.ollamaModel);
+    assert.equal(after.openaiModel, before.openaiModel);
   });
   it("POST /admin/switch sang openai thieu url/model thi 400", async () => {
     const r = await fetch(base + "/admin/switch", {
@@ -73,12 +73,29 @@ describe("admin", () => {
     });
     assert.equal(r.status, 400);
   });
-  it("POST /admin/switch sang ollama thieu model thi 400", async () => {
+  it("POST /admin/switch sang local luu model + session", async () => {
     const r = await fetch(base + "/admin/switch", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ backend: "ollama" }),
+      body: JSON.stringify({ backend: "local", localModel: "9router/ag/x", localSession: "test-ses-1", clientPatched: true }),
     });
-    assert.equal(r.status, 400);
+    assert.equal(r.status, 200);
+    const s = await (await fetch(base + "/admin/status")).json();
+    assert.equal(s.backend, "local");
+    assert.equal(s.localModel, "9router/ag/x");
+    assert.equal(s.localSession, "test-ses-1");
+  });
+  it("POST /admin/local-reset xoa session sticky", async () => {
+    await fetch(base + "/admin/switch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backend: "local", localSession: "ses_abc123", clientPatched: true }),
+    });
+    const r = await fetch(base + "/admin/local-reset", { method: "POST" });
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.ok, true);
+    assert.equal(j.localSession, "");
+    const s = await (await fetch(base + "/admin/status")).json();
+    assert.equal(s.localSession, "");
   });
   it("GET /admin/zen-models tra list verified", async () => {
     const j = await (await fetch(base + "/admin/zen-models")).json();
@@ -86,9 +103,9 @@ describe("admin", () => {
     assert.ok(j.verified.includes("muse-spark-1.3-contributor-free"));
     assert.ok(j.def);
   });
-  it("GET /admin/ollama-models offline thi ok=false", async () => {
-    const j = await (await fetch(base + "/admin/ollama-models")).json();
-    assert.ok(Array.isArray(j.models));
+  it("GET /diag co check opencode_cli", async () => {
+    const j = await (await fetch(base + "/diag")).json();
+    assert.ok(j.checks.opencode_cli);
   });
   it("GET / tra dashboard web", async () => {
     const r = await fetch(base + "/");
@@ -105,11 +122,12 @@ describe("admin", () => {
     assert.equal(r.status, 400);
   });
   it("loi backend async van tra JSON, khong treo request", async () => {
-    // backend ollama + model khong co -> handleOllama reject bat dong bo.
+    // backend local + binary khong co -> runOpencode reject bat dong bo.
     // (Cu: return thuong trong try -> catch khong chay -> treo + FATAL.)
+    process.env.OPENCODE_BIN = "binary-chac-chan-khong-co-xyz";
     await fetch(base + "/admin/switch", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ backend: "ollama", ollamaModel: "model-chac-chan-khong-co-xyz", clientPatched: true }),
+      body: JSON.stringify({ backend: "local", clientPatched: true }),
     });
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 15000);
@@ -123,6 +141,7 @@ describe("admin", () => {
       assert.equal(j.type, "error");
     } finally {
       clearTimeout(t);
+      delete process.env.OPENCODE_BIN;
       await fetch(base + "/admin/switch", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ backend: "zen", zenModel: "big-pickle", clientPatched: true }),

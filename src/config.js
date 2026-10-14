@@ -16,8 +16,8 @@ function num(name, def) {
   return Number.isFinite(v) && v > 0 ? v : def;
 }
 
-export const _b = str("BACKEND", "zen").toLowerCase();
-if (!["zen", "ollama", "openai", "claude"].includes(_b)) throw new Error(`BACKEND khong hop le: ${_b} (chon zen|ollama|openai|claude)`);
+export const _b = str("BACKEND", "local").toLowerCase();
+if (!["zen", "local", "openai", "claude"].includes(_b)) throw new Error(`BACKEND khong hop le: ${_b} (chon zen|local|openai|claude)`);
 const BACKEND = _b;
 export { BACKEND };
 export const PORT = (() => {
@@ -59,9 +59,18 @@ export const RESPONSES_MODELS = new Set(
 export const ZEN_VERIFIED = ZEN_CATALOG.verified || [...RESPONSES_MODELS];
 export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-free";
 
-// --- ollama ---
-export const OLLAMA_BASE = str("OLLAMA_BASE", "http://127.0.0.1:11434/v1").replace(/\/+$/, "");
-export const OLLAMA_MODEL = str("OLLAMA_MODEL", "");
+// --- opencode CLI local (BACKEND=local): chay `opencode run` tren chinh may nay ---
+// LOCAL_MODEL rong = dung model mac dinh trong opencode.json (khong truyen --model).
+export const LOCAL_MODEL = str("LOCAL_MODEL", "");
+// 1 session opencode sticky cho moi request Claude (session dai, nho lich su tool-loop).
+// Rong = request toi tao session moi (lay sessionID that tu --format json).
+export const LOCAL_SESSION = str("LOCAL_SESSION", "");
+// Tool-loop dai co the chay nhieu phut: timeout mac dinh 10 phut.
+export const LOCAL_TIMEOUT_MS = num("LOCAL_TIMEOUT_MS", 600000);
+// Thu muc opencode chay trong (phai thay duoc file project). Rong = thu muc chay proxy.
+export const LOCAL_CWD = str("LOCAL_CWD", "");
+// Agent opencode dung cho relay (vd relay-worker read-only). Rong = agent mac dinh.
+export const LOCAL_AGENT = str("LOCAL_AGENT", "");
 
 // --- openai-compatible generic (Groq/Cerebras/NVIDIA/OpenRouter/HF... tu nhap) ---
 // OPENAI_URL la FULL chat-completions URL (vd https://api.groq.com/openai/v1/chat/completions).
@@ -90,7 +99,8 @@ export const PROVIDERS = loadProviders();
 export const runtime = {
   backend: BACKEND,
   zenModel: ZEN_MODEL,
-  ollamaModel: OLLAMA_MODEL,
+  localModel: LOCAL_MODEL,
+  localSession: LOCAL_SESSION,
   openaiUrl: OPENAI_URL,
   openaiKey: OPENAI_KEY,
   openaiModel: OPENAI_MODEL,
@@ -111,10 +121,10 @@ export function loadRuntime() {
     if (!saved || typeof saved !== "object") return;
     // Env truyen vao luc start (menu start.js / systemd) uu tien hon file cu.
     const hasEnv = (n) => process.env[n] !== undefined && process.env[n] !== "";
-    if (["zen", "ollama", "openai", "claude"].includes(saved.backend) && !hasEnv("BACKEND")) {
+    if (["zen", "local", "openai", "claude"].includes(saved.backend) && !hasEnv("BACKEND")) {
       runtime.backend = saved.backend;
     }
-    for (const [k, env] of [["zenModel", "ZEN_MODEL"], ["ollamaModel", "OLLAMA_MODEL"], ["openaiUrl", "OPENAI_URL"], ["openaiKey", "OPENAI_KEY"], ["openaiModel", "OPENAI_MODEL"], ["claudeModel", "CLAUDE_MODEL"]]) {
+    for (const [k, env] of [["zenModel", "ZEN_MODEL"], ["localModel", "LOCAL_MODEL"], ["localSession", "LOCAL_SESSION"], ["openaiUrl", "OPENAI_URL"], ["openaiKey", "OPENAI_KEY"], ["openaiModel", "OPENAI_MODEL"], ["claudeModel", "CLAUDE_MODEL"]]) {
       if (typeof saved[k] === "string" && saved[k] && !hasEnv(env)) runtime[k] = saved[k];
     }
   } catch { /* chua co file -> dung env/mac dinh */ }

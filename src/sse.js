@@ -101,7 +101,7 @@ export async function collectResponses(upstreamRes) {
   return { id, output, usage, status };
 }
 
-// OpenAI-chat SSE -> Anthropic SSE (dung chung cho ollama + zen-chat).
+// OpenAI-chat SSE -> Anthropic SSE (dung chung cho openai + zen-chat).
 export async function streamOpenAi(up, down, model) {
   const framer = anthropicFramer(down, model);
   let stopReason = "end_turn", usage = null;
