@@ -218,7 +218,7 @@ async function load() {
       } catch (e) { say("Lỗi kết nối proxy: " + String(e).slice(0, 200)); }
     });
     // Bind local buttons
-    document.querySelectorAll("[data-local-use]").forEach((b) => { b.onclick = () => doSwitch({ provider: "local", model: "opencode/big-pickle" }, "local/opencode-big-pickle"); });
+    document.querySelectorAll("[data-local-use]").forEach((b) => { b.onclick = () => doSwitch({ provider: "local", model: "opencode/muse-spark-1.3-contributor-free" }, "local/muse-spark"); });
     document.querySelectorAll("[data-local-reset]").forEach((b) => b.onclick = async () => {
       say("đang reset session opencode...");
       try {

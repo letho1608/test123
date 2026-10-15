@@ -20,7 +20,7 @@ describe("config", () => {
     assert.equal(typeof LOCAL_SESSION, "string");
   });
   it("local mac dinh freetier opencode", () => {
-    if (!process.env.LOCAL_MODEL) assert.equal(LOCAL_MODEL, "opencode/big-pickle");
+    if (!process.env.LOCAL_MODEL) assert.equal(LOCAL_MODEL, "opencode/muse-spark-1.3-contributor-free");
   });
   it("MODEL_IDS chua zen + alias claude", () => {
     assert.ok(MODEL_IDS.includes(ZEN_MODEL));

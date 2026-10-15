@@ -266,7 +266,7 @@ async function main() {
     const ver = opencodeCheck();
     if (!ver) { console.error('khong chay duoc `opencode --version` (chua cai opencode CLI hoac chua co trong PATH?)'); rl.close(); process.exitCode = 1; return; }
     console.log(`opencode: ${ver}`);
-    const model = (await ask("model opencode (vd opencode/big-pickle, ENTER = freetier mac dinh): ")).trim() || "opencode/big-pickle";
+    const model = (await ask("model opencode (vd opencode/muse-spark-1.3-contributor-free, ENTER = freetier mac dinh): ")).trim() || "opencode/muse-spark-1.3-contributor-free";
     const cwd = (await ask(`thu muc opencode chay trong [${process.cwd()}]: `)).trim() || process.cwd();
     const cfg = loadSettings();
     cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: model || ALIAS };

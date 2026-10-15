@@ -61,7 +61,7 @@ export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-fr
 
 // --- opencode CLI local (BACKEND=local): chay `opencode run` tren chinh may nay ---
 // Mac dinh dung model freetier cua opencode (khong can key, khong can login).
-export const LOCAL_MODEL = str("LOCAL_MODEL", "opencode/big-pickle");
+export const LOCAL_MODEL = str("LOCAL_MODEL", "opencode/muse-spark-1.3-contributor-free");
 // 1 session opencode sticky cho moi request Claude (session dai, nho lich su tool-loop).
 // Rong = request toi tao session moi (lay sessionID that tu --format json).
 export const LOCAL_SESSION = str("LOCAL_SESSION", "");

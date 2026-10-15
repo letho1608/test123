@@ -61,7 +61,7 @@ async function cmdZen(model) {
 
 async function cmdLocal(model) {
   // Trong = freetier mac dinh (khong dung 9router/opencode.json cua may).
-  const m = (model && model.trim()) || "opencode/big-pickle";
+  const m = (model && model.trim()) || "opencode/muse-spark-1.3-contributor-free";
   const cfg = loadSettings();
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
   cfg.modelOverrides[ALIAS] = m;
@@ -115,7 +115,7 @@ async function main() {
   console.log([
     "dung: npm run switch -- <lenh>   (lenh status tu mo web dashboard)",
     "  status                       xem backend/model proxy dang dung + mo web",
-    "  local [model-opencode]       doi sang opencode CLI local (trong = freetier opencode/big-pickle)",
+    "  local [model-opencode]       doi sang opencode CLI local (trong = freetier muse-spark)",
     "  zen [model-zen]              doi sang Zen (can proxy dang chay; tu patch settings)",
     "  openai <url> [key] <model>   doi sang OpenAI-compat tu nhap (bat buoc URL + model)",
   ].join("\n"));

@@ -73,7 +73,7 @@ Mở tay cũng được: `http://127.0.0.1:8898/` (đúng port proxy đang chạ
 
 - **Opencode CLI local (khuyên dùng):** tool chạy trong `opencode` máy bạn, session
   dài sticky (`LOCAL_SESSION`, reset bằng nút "reset session opencode" trên dashboard
-  hoặc `POST /admin/local-reset`). Mặc định model freetier `opencode/big-pickle`
+  hoặc `POST /admin/local-reset`). Mặc định model freetier `opencode/muse-spark-1.3-contributor-free`
   (không key, không login); để trống mới rơi về mặc định trong `opencode.json`.
 - **Zen free tier:** bấm dùng 1 trong các model verified (nút "cập nhật zen" để tải list mới nhất)
 - **Claude gốc:** bấm dùng để đi thẳng API Anthropic (tốn phí tài khoản của bạn)
@@ -84,7 +84,7 @@ Mở tay cũng được: `http://127.0.0.1:8898/` (đúng port proxy đang chạ
 Dùng lệnh cũng được:
 
 ```bash
-npm run switch -- local [model-opencode]  # vd: npm run switch -- local opencode/big-pickle (mặc định freetier này)
+npm run switch -- local [model-opencode]  # vd: npm run switch -- local opencode/muse-spark-1.3-contributor-free (mặc định freetier này)
 npm run switch -- zen [model-zen]     # vd: npm run switch -- zen big-pickle
 npm run switch -- openai <url> [key] <model>
 ```
@@ -113,7 +113,7 @@ Menu:
 4. Exit
 ```
 
-Chọn `1` → nhập model opencode (ENTER = freetier `opencode/big-pickle`) + thư mục
+Chọn `1` → nhập model opencode (ENTER = freetier `opencode/muse-spark-1.3-contributor-free`) + thư mục
 làm việc (`LOCAL_CWD`). Proxy chạy `opencode run --format json` cho mỗi request
 Claude: session dài, tool-call liên tục nằm gọn trong opencode.
 Chọn `2` → liệt kê model Zen free (đọc từ `models.opencode.ai`, giống `opencode models opencode`
