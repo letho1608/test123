@@ -1,7 +1,7 @@
 // test/config.test.js — hang so + assets (khong can mang)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets, OPENAI_URL, OPENAI_MODEL, LOCAL_TIMEOUT_MS, LOCAL_SESSION } from "../src/config.js";
+import { PORT, HOST, BACKEND, ZEN_BASE, ZEN_MODEL, RESPONSES_MODELS, MODEL_IDS, T_SES, M_MSG, loadAssets, OPENAI_URL, OPENAI_MODEL, LOCAL_TIMEOUT_MS, LOCAL_SESSION, LOCAL_MODEL } from "../src/config.js";
 
 describe("config", () => {
   it("default hop le", () => {
@@ -18,6 +18,9 @@ describe("config", () => {
   it("local default hop le", () => {
     assert.ok(LOCAL_TIMEOUT_MS >= 60000);
     assert.equal(typeof LOCAL_SESSION, "string");
+  });
+  it("local mac dinh freetier opencode", () => {
+    if (!process.env.LOCAL_MODEL) assert.equal(LOCAL_MODEL, "opencode/big-pickle");
   });
   it("MODEL_IDS chua zen + alias claude", () => {
     assert.ok(MODEL_IDS.includes(ZEN_MODEL));

@@ -200,7 +200,8 @@ function burstText(framer, text) {
 
 export async function handleLocal(body, model, res, log, opts = {}) {
   const session = opts.session || runtime.localSession || "";
-  // model rong = dung model mac dinh trong opencode.json (khong truyen --model).
+  // model rong = bo qua --model, dung mac dinh trong opencode.json.
+  // Mac dinh runtime.localModel = freetier (xem LOCAL_MODEL trong config).
   const useModel = opts.model !== undefined ? opts.model : (runtime.localModel || "");
   const prompt = buildLocalPrompt(body);
   log(`local opencode session=${session || "(moi)"} model=${useModel || "(mac dinh opencode.json)"} prompt=${prompt.length} chars (lot ${(body.tools || []).length} tools Claude)`);

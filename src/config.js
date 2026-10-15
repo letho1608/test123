@@ -60,8 +60,8 @@ export const ZEN_VERIFIED = ZEN_CATALOG.verified || [...RESPONSES_MODELS];
 export const ZEN_DEFAULT = ZEN_CATALOG.default || "muse-spark-1.3-contributor-free";
 
 // --- opencode CLI local (BACKEND=local): chay `opencode run` tren chinh may nay ---
-// LOCAL_MODEL rong = dung model mac dinh trong opencode.json (khong truyen --model).
-export const LOCAL_MODEL = str("LOCAL_MODEL", "");
+// Mac dinh dung model freetier cua opencode (khong can key, khong can login).
+export const LOCAL_MODEL = str("LOCAL_MODEL", "opencode/big-pickle");
 // 1 session opencode sticky cho moi request Claude (session dai, nho lich su tool-loop).
 // Rong = request toi tao session moi (lay sessionID that tu --format json).
 export const LOCAL_SESSION = str("LOCAL_SESSION", "");

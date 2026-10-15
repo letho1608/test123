@@ -266,7 +266,7 @@ async function main() {
     const ver = opencodeCheck();
     if (!ver) { console.error('khong chay duoc `opencode --version` (chua cai opencode CLI hoac chua co trong PATH?)'); rl.close(); process.exitCode = 1; return; }
     console.log(`opencode: ${ver}`);
-    const model = (await ask("model opencode (vd 9router/ag/x, ENTER = mac dinh trong opencode.json): ")).trim();
+    const model = (await ask("model opencode (vd opencode/big-pickle, ENTER = freetier mac dinh): ")).trim() || "opencode/big-pickle";
     const cwd = (await ask(`thu muc opencode chay trong [${process.cwd()}]: `)).trim() || process.cwd();
     const cfg = loadSettings();
     cfg.modelOverrides = { ...(cfg.modelOverrides || {}), [ALIAS]: model || ALIAS };
@@ -279,9 +279,8 @@ async function main() {
     saveSettings(cfg);
     console.log(`da patch ${CLAUDE_SETTINGS} (di qua proxy -> opencode CLI local)`);
     rl.close();
-    const env = { ...process.env, PORT: String(PORT), BACKEND: "local", LOCAL_CWD: cwd };
-    if (model) env.LOCAL_MODEL = model;
-    console.log(`\nbackend=local model=${model || "(mac dinh opencode.json)"} cwd=${cwd}\nMo terminal khac chay claude (settings.json da co san env).\n`);
+    const env = { ...process.env, PORT: String(PORT), BACKEND: "local", LOCAL_CWD: cwd, LOCAL_MODEL: model };
+    console.log(`\nbackend=local model=${model} cwd=${cwd}\nMo terminal khac chay claude (settings.json da co san env).\n`);
     const p = spawn(process.execPath, [path.join(ROOT, "proxy.mjs")], { env, stdio: "inherit" });
     if (await waitReady(PORT)) console.log(`\nproxy READY o http://127.0.0.1:${PORT} -> gio mo terminal khac chay claude.`);
     else console.log(`\nCANH BAO: proxy chua nghe sau 15s. Kiem tra log o tren.`);

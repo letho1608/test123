@@ -176,9 +176,9 @@ async function load() {
       const isCustom = !["zen", "local", "claude"].includes(prov.id);
       html += '<div class="card"><h3>' + esc(prov.name) + ' (' + esc(prov.type) + ')' + (isCustom ? ' <button data-del-provider="' + esc(prov.id) + '">xóa</button>' : '') + '</h3>';
       if (prov.type === "local") {
-        html += '<p class="muted">opencode CLI trên máy này (chạy opencode run -s, tool chạy nội bộ trong opencode, không qua server opencode.ai). Model trống = dùng mặc định trong opencode.json.</p>';
-        html += '<div class="muted">OPENCODE_BIN: đường dẫn binary opencode (Windows mặc định opencode.cmd).</div>';
-        html += '<div class="row"><button data-local-use="1" type="button">dùng opencode mặc định</button><button data-local-reset="1" type="button">reset session opencode</button></div>';
+        html += '<p class="muted">opencode CLI trên máy này (chạy opencode run --format json, tool chạy nội bộ trong opencode, không qua server opencode.ai). Mặc định freetier, không key.</p>';
+        html += '<div class="muted">OPENCODE_BIN: đường dẫn binary opencode (Windows tự resolve sang opencode.exe thật).</div>';
+        html += '<div class="row"><button data-local-use="1" type="button">dùng freetier mặc định</button><button data-local-reset="1" type="button">reset session opencode</button></div>';
       } else if (prov.type === "zen") {
         const z = await api("/admin/zen-models");
         const zlist = z.verified || [];
@@ -218,7 +218,7 @@ async function load() {
       } catch (e) { say("Lỗi kết nối proxy: " + String(e).slice(0, 200)); }
     });
     // Bind local buttons
-    document.querySelectorAll("[data-local-use]").forEach((b) => b.onclick = () => doSwitch({ provider: "local", model: "" }, "local/(mặc định opencode.json)"));
+    document.querySelectorAll("[data-local-use]").forEach((b) => { b.onclick = () => doSwitch({ provider: "local", model: "opencode/big-pickle" }, "local/opencode-big-pickle"); });
     document.querySelectorAll("[data-local-reset]").forEach((b) => b.onclick = async () => {
       say("đang reset session opencode...");
       try {

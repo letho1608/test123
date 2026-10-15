@@ -60,10 +60,11 @@ async function cmdZen(model) {
 }
 
 async function cmdLocal(model) {
-  // model rong = dung model mac dinh trong opencode.json cua may.
+  // Trong = freetier mac dinh (khong dung 9router/opencode.json cua may).
+  const m = (model && model.trim()) || "opencode/big-pickle";
   const cfg = loadSettings();
   cfg.modelOverrides = { ...(cfg.modelOverrides || {}) };
-  cfg.modelOverrides[ALIAS] = (model && model.trim()) || ALIAS;
+  cfg.modelOverrides[ALIAS] = m;
   cfg.env = {
     ...(cfg.env || {}),
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${PORT}`,
@@ -71,9 +72,9 @@ async function cmdLocal(model) {
     ANTHROPIC_MODEL: ALIAS,
   };
   const p = saveSettings(cfg);
-  console.log(`da patch ${p} -> opencode CLI local (model ${model || "(mac dinh opencode.json)"})`);
+  console.log(`da patch ${p} -> opencode CLI local (model ${m})`);
   try {
-    const s = await post("/admin/switch", { provider: "local", model: model || "", clientPatched: true });
+    const s = await post("/admin/switch", { provider: "local", model: m, clientPatched: true });
     console.log("proxy:", JSON.stringify(s.json));
   } catch {
     console.log("proxy chua chay (mo bang npm start) - settings da luu, mo proxy la dung ngay.");
@@ -114,7 +115,7 @@ async function main() {
   console.log([
     "dung: npm run switch -- <lenh>   (lenh status tu mo web dashboard)",
     "  status                       xem backend/model proxy dang dung + mo web",
-    "  local [model-opencode]       doi sang opencode CLI local (trong = mac dinh opencode.json)",
+    "  local [model-opencode]       doi sang opencode CLI local (trong = freetier opencode/big-pickle)",
     "  zen [model-zen]              doi sang Zen (can proxy dang chay; tu patch settings)",
     "  openai <url> [key] <model>   doi sang OpenAI-compat tu nhap (bat buoc URL + model)",
   ].join("\n"));
